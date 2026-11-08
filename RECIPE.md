@@ -5,16 +5,16 @@ Javijec is a complete Herdr workspace layout: a machine-aware sidebar, active te
 ## What you see
 
 - **Left sidebar (268 px):** a 46 px workspace title bar; Machines, Spaces, and Agents sharing the remaining height; CPU/memory metrics beneath each machine; and a 28 px footer. The sidebar has a dark `chrome` background and can be resized from 44 to 480 px.
-- **Top workspace row (42 px):** tabs and panel buttons for Files, Changes, Git Graph, Pull Requests, and Linear Issues.
+- **Top workspace row (42 px):** tabs and panel buttons for Files, Changes, Git Graph, Pull Requests, Linear Issues, and Gentle Shell.
 - **Center work area:** the active tab and its terminal panes. Each pane has an always-visible 30 px Better Changes header, an 8 px gap, a 10 px radius, a border, and an accent focus border.
-- **Right tool panel (368 px):** a resizable stack (280–900 px) containing Files, Changes, Git Graph, Pull Requests, and Linear Issues. The package defaults to Git Graph; the panel button selects another tool.
+- **Right tool panel (368 px):** a resizable stack (280–900 px) containing Files, Changes, Git Graph, Pull Requests, Linear Issues, and Gentle Shell. The package defaults to Git Graph; the panel button selects another tool.
 - **Bottom status row (28 px):** workspace/agent status and provider usage limits.
 - **Appearance:** the layout fixes light mode to `paper` and dark mode to `atom-one-dark`. The included `gentle`, `gentleman-cute`, and `gentleman-sexy` themes are optional alternatives in Herdr's theme picker; Javijec does not select them automatically.
 
 ## How it behaves
 
 - Spaces and agents are shown by machine. Herdr agent states are `blocked`, `done`, `working`, and `idle`; the most urgent state takes precedence in a workspace (`blocked > done > working > idle`). Selecting a space or agent changes the active work context.
-- The top buttons switch the right-hand panel; the selected panel is remembered by Better Tabs. Files browses the active workspace; Changes shows working-tree/commit changes; Git Graph shows branches and history; the PR and issue panels expose their respective integrations.
+- The top buttons switch the right-hand panel; the selected panel is remembered by Better Tabs. Files browses the active workspace; Changes shows working-tree/commit changes; Git Graph shows branches and history; the PR and issue panels expose their respective integrations. Gentle Shell shows a bounded, read-only projection from the optional Pi bridge.
 - The pane header is supplied by Better Changes. Pane framing follows the active tab and Herdr's normal pane focus, split, zoom, and close behavior.
 - The vitals panel reports CPU and memory for machines; it intentionally does not show disk usage.
 - The status row summarizes the current machine/workspace and agent count alongside provider usage windows.
@@ -37,6 +37,7 @@ Custom mods included under `mods/`:
 - `branch-issue` — Linear issue and worktree panel.
 - `workspace-status` — bottom workspace status.
 - `usage-limits` — provider usage limits.
+- `gentle-herdr-sidebar` — separate selectable panel for Gentle Shell session status, changes, TODOs, and limited Agents history.
 
 The package also includes the three custom theme files in `themes/`. It does not include global Herdr settings, personal shared state, or a workstation's key bindings.
 
@@ -49,11 +50,13 @@ Programs and integrations: Git is used by the Git panels; `gh` is used by the pu
 - Git-dependent panels require Git and a valid repository in the active workspace. Some worktree actions fetch remote refs.
 - Usage limits depend on the provider apps and local usage data available on the destination PC; unavailable providers may show no usage data.
 - The custom themes are included but optional. Users can choose them in Herdr's theme picker without changing the layout.
+- Gentle Shell's bridge is a separate Pi extension in `extensions/gentle-herdr-bridge.mjs`; enable it through the normal Pi extension workflow. Snapshots default to `~/.gentle-herdr` (or `GENTLE_HERDR_DIR`). No user-level config is installed or edited by this package.
+- Absent, stale, malformed, and out-of-scope snapshot data remains unavailable. Agents shows Herdr-reported terminal status and, when present, recent finished task history only; it does not provide live Gentle Agents task progress and is not 1:1 parity with the Gentle Shell Agents rail. Upstream S11 native committed-candidate review proof was blocked; this integration does not claim that review approved the feature.
 - Keep each module's folder name unchanged because the layout refers to those names. Do not copy this package's files over existing custom mods without comparing them first.
 
 ## Done when
 
-1. `herdr-app check mods/<name>` passes for all eleven included mods.
+1. `herdr-app check mods/<name>` passes for each included mod, including `gentle-herdr-sidebar`.
 2. `layouts/javijec.json` parses, and each mod referenced by it exists under `mods/`.
 3. The layout can be switched to with `herdr-app do layout.switch '{"name":"javijec"}'`.
 4. The screenshot `preview.png` shows the running Javijec layout.

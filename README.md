@@ -5,6 +5,7 @@ This folder is a portable package for the Javijec layout. To install it on anoth
 - `layouts/javijec.json` → `<HERDR_APP_HOME>/layouts/javijec.json`
 - `mods/*` → `<HERDR_APP_HOME>/mods/`
 - `themes/*` → `<HERDR_APP_HOME>/themes/`
+- `extensions/gentle-herdr-bridge.mjs` and `bridge/*` → keep together in this package and load the extension from your Pi/Gentle Shell setup
 - `RECIPE.md` and `preview.png` are the layout's share-page description and preview.
 
 Do not replace existing files with the same names without checking them first. After copying, run `herdr-app check mods/<name>` for each included mod, then switch with:
@@ -13,7 +14,11 @@ Do not replace existing files with the same names without checking them first. A
 herdr-app do layout.switch '{"name":"javijec"}'
 ```
 
-The PR and Linear panels require their respective local CLI/helper and authentication. See [RECIPE.md](RECIPE.md) for the full list of integrations and limitations.
+The PR and Linear panels require their respective local CLI/helper and authentication. The optional Gentle Shell panel also needs the separate Pi bridge extension enabled; it is a read-only projection and does not provide live Gentle Agents task progress or 1:1 parity. See [RECIPE.md](RECIPE.md) for integrations and limitations.
+
+The Gentle Shell selector is included in `layouts/javijec.json`. The Herdr mod lives at `mods/gentle-herdr-sidebar/`; its bridge is `extensions/gentle-herdr-bridge.mjs` with data helpers under `bridge/`. This package does not install or enable the extension automatically and does not edit user-level Herdr or Gentle Shell configuration.
+
+Run the deterministic package checks with `npm test`. The bridge can be loaded from Pi through the package's `pi.extensions` declaration.
 
 Before publishing this package publicly, review or replace `preview.png`: it is a live screenshot and may show current workspace names or terminal content.
 

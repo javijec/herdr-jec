@@ -1,0 +1,12 @@
+{
+  "name": "javijec-gentle-herdr-sidebar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/gentle-herdr-sidebar-model.test.mjs test/bridge.test.mjs test/changes.test.mjs"
+  },
+  "pi": {
+    "extensions": ["./extensions/gentle-herdr-bridge.mjs"]
+  }
+}

@@ -1,0 +1,101 @@
+import { View, div } from "gpui-kit";
+import { h_flex, v_flex } from "gpui-base";
+import { closeOverlay, exec, focused, home, nextCommand, openOverlay, panes, props, readTextFile, spaces, theme, agents } from "herdr";
+import { agentProgressNotice, formatPercent, isRecord, normalizeHerdrAgents, nonNegative, previewTodos, percentTone, runningJobs, safeText, sameDirectory, selectSnapshot } from "./model.js";
+
+const PRESENCE_LIMIT = 64, MAX_ACTIVE_AGE_MS = 60_000, MAX_SNAPSHOT_BYTES = 1024 * 1024;
+const SNAPSHOT_NAME = /^session-[A-Za-z0-9_-]+\.json$/, PRESENCE_NAME = /^presence-[A-Za-z0-9_-]+\.json$/;
+function joinPath(directory, name) { const trimmed = String(directory).replace(/[\\/]+$/, ""), separator = String(directory).includes("\\") && !String(directory).includes("/") ? "\\" : "/"; return `${trimmed}${trimmed.endsWith(":") && separator === "\\" ? "\\" : separator}${name}`; }
+function absolutePath(value) { return typeof value === "string" && /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(value); }
+function paneTarget() {
+  const configured = props() ?? {};
+  if (typeof configured.cwd === "string" && configured.cwd) return { cwd: configured.cwd, machine: configured.machine || null, terminal: configured.terminal ?? null, space: configured.space, tab: configured.tab };
+  const space = spaces().find((item) => item.active), tab = space?.tabs?.find((item) => item.active), current = focused();
+  const visible = panes().filter((item) => item.tab === tab?.id && item.terminal && item.cwd);
+  const pane = visible.find((item) => item.pane === current?.pane) ?? visible.find((item) => item.focused) ?? visible[0];
+  return { cwd: pane?.cwd ?? current?.cwd ?? space?.folder ?? "", machine: space?.machine ?? null, terminal: pane?.terminal ?? current?.terminal ?? null, space: space?.id, tab: tab?.id };
+}
+async function shellOutput(target, command, args) { const result = await exec(command, args, { on: target.machine, cwd: target.cwd || undefined }); if (result.code !== 0) throw new Error("Unable to inspect bridge directory"); return result.stdout.trim(); }
+async function bridgeDirectory(target, override) {
+  if (typeof override === "string" && override) { if (!absolutePath(override)) throw new Error("Snapshot directory must be absolute"); return override; }
+  try { const value = await shellOutput(target, "sh", ["-c", 'if [ -n "$GENTLE_HERDR_DIR" ]; then printf "%s\\n" "$GENTLE_HERDR_DIR"; else printf "%s/.gentle-herdr\\n" "$HOME"; fi']); if (absolutePath(value)) return value; } catch {}
+  try { const value = await shellOutput(target, "powershell", ["-NoProfile", "-Command", "if ($env:GENTLE_HERDR_DIR) { [IO.Path]::GetFullPath($env:GENTLE_HERDR_DIR) } else { Join-Path $HOME '.gentle-herdr' }"]); if (absolutePath(value)) return value; } catch {}
+  if (!target.machine) return joinPath(home(), ".gentle-herdr"); throw new Error("Cannot resolve remote bridge directory");
+}
+async function listPresenceNames(target, directory) {
+  const script = `Get-ChildItem -LiteralPath $args[0] -File -Filter 'presence-*.json' -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First ${PRESENCE_LIMIT} -ExpandProperty Name | ConvertTo-Json -Compress`;
+  try { const text = await shellOutput(target, "powershell", ["-NoProfile", "-Command", script, directory]); const parsed = JSON.parse(text || "[]"); return (Array.isArray(parsed) ? parsed : [parsed]).filter((name) => typeof name === "string" && PRESENCE_NAME.test(name)); }
+  catch { try { const text = await shellOutput(target, "sh", ["-c", 'ls -1t "$1"/presence-*.json 2>/dev/null | head -n "$2" | while IFS= read -r p; do printf "%s\\n" "${p##*/}"; done', "gentle-herdr-sidebar", directory, String(PRESENCE_LIMIT)]); return text.split(/\r?\n/).filter((name) => PRESENCE_NAME.test(name)); } catch { return []; } }
+}
+async function readSnapshots(target, override, now) {
+  const directory = await bridgeDirectory(target, override), names = await listPresenceNames(target, directory);
+  const records = await Promise.all(names.map(async (name) => { try {
+    const raw = await readTextFile(joinPath(directory, name), { on: target.machine }); if (typeof raw !== "string" || raw.length > 16_384) return;
+    const value = JSON.parse(raw); if (!isRecord(value) || typeof value.sessionId !== "string" || !value.sessionId || typeof value.cwd !== "string" || !sameDirectory(value.cwd, target.cwd)) return;
+    const updatedAt = Date.parse(value.updatedAt), age = now - updatedAt; if (!Number.isFinite(updatedAt) || age < 0 || age > MAX_ACTIVE_AGE_MS) return;
+    const snapshotName = name.replace(/^presence-/, "session-"); if (!SNAPSHOT_NAME.test(snapshotName)) return;
+    return { name: snapshotName, sessionId: value.sessionId, cwd: value.cwd, updatedAt, updatedAtText: value.updatedAt };
+  } catch { return; } }));
+  const candidates = records.filter(Boolean).sort((a,b) => b.updatedAt-a.updatedAt).slice(0, 8);
+  return (await Promise.all(candidates.map(async (record) => { try {
+    const raw = await readTextFile(joinPath(directory, record.name), { on: target.machine }); if (typeof raw !== "string" || raw.length > MAX_SNAPSHOT_BYTES) return;
+    const value = JSON.parse(raw); if (!isRecord(value) || value.sessionId !== record.sessionId || value.updatedAt !== record.updatedAtText || !sameDirectory(value.cwd, record.cwd)) return; return value;
+  } catch { return; } }))).filter(Boolean);
+}
+function colorForTone(t, tone) { return tone === "danger" ? t.ansi1 ?? t.blocked : tone === "warning" ? t.ansi3 ?? t.working : t.foreground; }
+function statusColor(t, state) { return ({ working:t.working, blocked:t.blocked, failed:t.blocked, done:t.done, idle:t.idle, aborted:t.dim })[state] ?? t.unknown ?? t.muted; }
+function countText(value) { const number = nonNegative(value); return number === undefined ? undefined : String(Math.round(number)); }
+function moneyText(value) { const number = nonNegative(value); return number === undefined ? undefined : `$${number.toFixed(2)}`; }
+function row(label, value, t, valueColor=t.foreground) { const l=safeText(label,100), v=typeof value === "string" ? safeText(value,1000) : undefined; if(!l||!v)return null; return h_flex().min_h(22).gap(8).items_center().child(div().text_size(12).text_color(t.dim).child(l)).child(div().flex_1().min_w(0)).child(div().min_w(0).truncate().text_right().text_size(12).text_color(valueColor).child(v)); }
+function section(title, summary, t, {onClick,children=[]}={}) { let head=h_flex().min_h(26).gap(8).items_center().child(div().font_semibold().text_color(t.foreground).child(title)).child(div().flex_1().min_w(0)).child(div().min_w(0).truncate().text_right().text_size(11).text_color(t.muted).child(summary??"")); if(onClick)head=head.cursor_pointer().hover(s=>s.bg(t.hover)).on_click(onClick); return v_flex().gap(4).px(10).py(7).border_b(1).border_color(t.border).child(head).child(v_flex().gap(2).children(children.filter(Boolean))); }
+function stateLabel(state) { return ({working:"Working",blocked:"Blocked",done:"Done",idle:"Idle",failed:"Failed",aborted:"Aborted"})[state] ?? safeText(state,60); }
+function statusRows(snapshot,t) {
+  const s=snapshot.status, out=[row("Folder",snapshot.cwd,t),row("Branch",snapshot.branch,t),row("Model",s.model,t),row("Effort",s.effort,t),row("Profile",s.profile,t),row("Session",s.sessionName,t)];
+  if(isRecord(s.context)){const p=formatPercent(s.context.pct);if(p)out.push(row("Context",p,t,colorForTone(t,percentTone(s.context.pct))));}
+  if(isRecord(s.cost)){const c=moneyText(s.cost.usd);if(c)out.push(row(s.cost.sub?"Cost · sub":"Cost",c,t));}
+  if(safeText(s.agentState,40))out.push(row("State",stateLabel(s.agentState),t,statusColor(t,s.agentState)));
+  for(const provider of Array.isArray(s.usage)?s.usage.slice(0,12):[]){if(!isRecord(provider)||!Array.isArray(provider.limits))continue;const name=safeText(provider.provider,100);if(!name)continue;for(const limit of provider.limits.slice(0,12)){if(!isRecord(limit)||!Array.isArray(limit.windows))continue;for(const w of limit.windows.slice(0,8)){if(!isRecord(w))continue;const p=formatPercent(w.usedPercent), label=safeText(w.label,100);if(p&&label)out.push(row(`${name} · ${label}`,p,t,colorForTone(t,percentTone(w.usedPercent))));}}}
+  for(const text of Array.isArray(s.extensionStatuses)?s.extensionStatuses.slice(0,24):[]) { const clean=safeText(text,300);if(clean)out.push(row("Integration",clean,t)); } return out;
+}
+function changes(snapshot,t,summary=false) {
+  const roots=isRecord(snapshot?.status?.changes)&&Array.isArray(snapshot.status.changes.roots)?snapshot.status.changes.roots.filter(isRecord).slice(0,64):undefined;
+  if(summary)return !roots?"Changes unavailable":roots.reduce((n,r)=>n+(Array.isArray(r.files)?r.files.length:0),0)===0?"Clean working tree":`${roots.reduce((n,r)=>n+(Array.isArray(r.files)?r.files.length:0),0)} files`;
+  if(!roots)return [div().text_size(12).text_color(t.muted).child("Changes data unavailable")]; if(!roots.length)return [div().text_size(12).text_color(t.muted).child("No uncommitted changes")]; const out=[];
+  for(const root of roots){const rootName=safeText(root.root,1000);if(rootName)out.push(div().pt(8).pb(3).text_size(12).font_semibold().text_color(t.muted).child(rootName));for(const f of (Array.isArray(root.files)?root.files:[]).filter(isRecord).slice(0,200)){const p=safeText(f.path,1000),st=safeText(f.status,12);if(!p||!st)continue;const delta=f.countsUnavailable?"line counts unavailable":`+${countText(f.additions)??"?"} −${countText(f.deletions)??"?"}`;out.push(h_flex().min_h(24).gap(8).items_center().child(div().w(30).flex_none().text_size(11).text_color(statusColor(t,st.trim())).child(st.trim())).child(div().flex_1().min_w(0).truncate().text_size(12).child(p)).child(div().flex_none().text_size(11).text_color(t.muted).child(delta)));}} return out;
+}
+function agentsFor(target) { try{return normalizeHerdrAgents(agents(),target);}catch{return [];} }
+function agentDetails(snapshot,t,target,compact=false) {
+  const state=snapshot?.status?.agents, items=isRecord(state)&&Array.isArray(state.items)?state.items.filter(isRecord).slice(0,3):undefined, live=agentsFor(target), out=[div().pb(4).text_size(12).text_color(t.muted).child(agentProgressNotice(state))];
+  if(!live.length)out.push(div().text_size(12).text_color(t.dim).child("No Herdr agents in this tab"));
+  for(const item of live.slice(0,compact?1:100))out.push(h_flex().min_h(22).gap(7).items_center().child(div().w(13).flex_none().text_color(statusColor(t,item.status)).child("●")).child(div().flex_1().min_w(0).truncate().text_size(12).font_semibold().child(item.name)).child(div().flex_none().text_size(11).text_color(statusColor(t,item.status)).child(stateLabel(item.status)??"Unknown")).when(Boolean(item.app),e=>e.child(div().flex_none().text_size(10).text_color(t.dim).child(item.app))));
+  if(!isRecord(state)||!items){out.push(div().pt(5).text_size(12).text_color(t.dim).child("Recent Gentle Agents task history unavailable"));return out;} if(state.historyPartial)out.push(div().text_size(11).text_color(t.ansi3??t.working).child("Recent task history is partial"));
+  if(!items.length){out.push(div().text_size(12).text_color(t.dim).child(state.historyAvailable?"No recent finished tasks":"Recent task history unavailable"));return out;}
+  for(const item of items.slice(0,compact?1:3)){const a=safeText(item.agent,100)??"Agent", label=safeText(item.label,300)??"Finished task", st=safeText(item.state,32);out.push(v_flex().gap(2).py(4).border_b(1).border_color(t.border).child(h_flex().gap(6).items_center().child(div().flex_1().min_w(0).truncate().text_size(12).font_semibold().child(label)).child(div().flex_none().text_size(11).text_color(statusColor(t,st)).child(stateLabel(st)??"Unknown"))).child(div().text_size(11).text_color(t.dim).child([a,safeText(item.model,80),countText(item.tokens)===undefined?undefined:`${countText(item.tokens)} tokens`,moneyText(item.costUsd),item.elapsedMs===undefined?undefined:`${Math.floor(item.elapsedMs/1000)}s`].filter(Boolean).join(" · "))));}return out;
+}
+function todoDetails(snapshot,t,expanded=false){const todos=snapshot?.status?.todos;if(!isRecord(todos)||!Array.isArray(todos.items))return [div().text_size(12).text_color(t.muted).child("TODO data unavailable")];const items=todos.items.filter(isRecord).slice(0,500),visible=previewTodos(items,expanded),out=[];if(nonNegative(todos.staleTurns)>=2)out.push(div().pb(3).text_size(11).text_color(t.ansi3??t.working).child(`stale · ${Math.round(todos.staleTurns)} turns`));for(const item of visible){const title=safeText(item.text,300),state=safeText(item.state,32);if(title&&state)out.push(h_flex().min_h(22).gap(7).items_center().child(div().w(13).flex_none().text_size(11).text_color(statusColor(t,state)).child(state==="done"?"✓":state==="in_progress"?"●":"○")).child(div().flex_1().min_w(0).truncate().text_size(12).child(title)).child(div().flex_none().text_size(10).text_color(t.muted).child(state.replace("_"," "))));}if(expanded&&items.length>visible.length)out.push(div().text_size(11).text_color(t.dim).child(`… ${items.length-visible.length} more`));if(!items.length)out.push(div().text_size(12).text_color(t.dim).child("No TODO items"));else if(!expanded&&!visible.length)out.push(div().text_size(12).text_color(t.dim).child("No pending or in-progress TODO items"));return out;}
+function statsDetails(snapshot,t){const s=snapshot.status.stats;if(!isRecord(s))return [];const out=[];for(const [name,value] of [["Session spend",moneyText(s.cost)],["Input tokens",countText(s.input)],["Output tokens",countText(s.output)],["Cache hit",formatPercent(Number.isFinite(s.cacheHitRate)?s.cacheHitRate*100:undefined)],["Tool calls",countText(s.toolCalls)],["Tool failures",countText(s.toolErrors)],["Subagent spend",moneyText(s.subagents?.cost)]])if(value!==undefined)out.push(row(name,value,t));for(const m of Array.isArray(s.models)?s.models.filter(isRecord).slice(0,12):[]){const name=safeText(m.model,120),cost=moneyText(m.cost),tokens=countText(m.tokens);if(name)out.push(row(name,[cost,tokens?`${tokens} tokens`:undefined].filter(Boolean).join(" · "),t));}return out;}
+
+export default class GentleHerdrSidebar extends View {
+  init(_initialProps,cx){const settings=props()??{};this.panel=settings.panel==="changes"||settings.panel==="agents"?settings.panel:null;this.directoryOverride=settings.snapshotDirectory;this.active=true;this.requestId=0;this.contextKey="";this.target=paneTarget();this.snapshot=null;this.error=null;this.loading=false;this.todoExpanded=false;this.refresh(cx);cx.timer.every(2000,c=>this.refresh(c));if(!this.panel)this.listenForCommands(cx);}
+  async close(){this.active=false;this.requestId+=1;}
+  listenForCommands(cx){cx.spawn(async()=>{while(this.active){let command;try{command=await nextCommand();}catch{return;}if(!this.active)return;const action=typeof command==="string"?command.split(":").at(-1).split(".").at(-1):"";if(action==="changes"||action==="agents")this.openPanel(action);}});}
+  openPanel(panel){const target=this.target??paneTarget();if(!target.cwd||!["changes","agents"].includes(panel))return;openOverlay({mod:"gentle-herdr-sidebar",props:{panel,cwd:target.cwd,machine:target.machine,terminal:target.terminal,space:target.space,tab:target.tab,snapshotDirectory:this.directoryOverride},kind:"dialog",modal:true,width:720,height:760});}
+  refresh(cx){if(!this.active)return;const target=paneTarget(),key=JSON.stringify({...target,panel:this.panel});if(key!==this.contextKey){this.contextKey=key;this.target=target;this.snapshot=null;this.error=null;this.loading=false;this.todoExpanded=false;this.requestId+=1;}if(!target.cwd||this.loading)return;this.loading=true;const id=++this.requestId,copy={...target};cx.spawn(async c=>{try{const candidates=await readSnapshots(copy,this.directoryOverride,Date.now()),selected=selectSnapshot(candidates,copy.cwd,Date.now());if(id===this.requestId){this.snapshot=selected;this.error=null;}}catch{if(id===this.requestId){this.snapshot=null;this.error="Bridge snapshot reader unavailable";}}finally{if(id===this.requestId){this.loading=false;c.notify();}}});}
+  render(cx){const target=paneTarget(),key=JSON.stringify({...target,panel:this.panel});if(key!==this.contextKey)this.refresh(cx);const t=theme(),snapshot=this.snapshot;
+    if (this.panel) {
+      const title = this.panel === "changes" ? "Changes" : "Agents";
+      const overlay = props()?.overlay;
+      const details = this.panel === "agents" ? agentDetails(snapshot, t, target) : snapshot ? changes(snapshot, t) : [div().p(16).text_size(12).text_color(t.muted).child("No recent bridge snapshot for this pane")];
+      const header = h_flex().h(42).flex_none().px(14).gap(8).items_center().border_b(1).border_color(t.border)
+        .child(div().flex_1().font_semibold().child(title))
+        .child(div().cursor_pointer().text_color(t.muted).on_click(() => { if (overlay) closeOverlay(overlay); }).child("Close"));
+      return v_flex().id(`gentle-herdr-${this.panel}-overlay`).size_full().min_h(0).rounded(10).overflow_hidden()
+        .bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13)
+        .child(header)
+        .child(v_flex().id(`gentle-herdr-${this.panel}-details`).flex_1().min_h(0).overflow_y_scrollbar().p(10).children(details));
+    }
+    if(!target.cwd)return v_flex().id("gentle-herdr-sidebar-empty").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border).text_color(t.foreground).child(div().py(12).text_center().text_color(t.muted).child("Select a terminal pane to view Gentle Shell status"));
+    const sections=snapshot?[section("Status",snapshot.status.agentState?stateLabel(snapshot.status.agentState):"",t,{children:statusRows(snapshot,t)}),section("Changes",changes(snapshot,t,true),t,{onClick:()=>this.openPanel("changes"),children:[div().text_size(11).text_color(t.dim).child("Click to inspect changed files")]}),section("Agents",`${agentsFor(target).length} Herdr agents · ${snapshot.status.agents?.historyAvailable?"recent task history":"task history unavailable"}`,t,{onClick:()=>this.openPanel("agents"),children:agentDetails(snapshot,t,target,true)}),section("TODO",`${Array.isArray(snapshot.status.todos?.items)?snapshot.status.todos.items.filter(x=>x.state==="done").length:0} of ${snapshot.status.todos?.items?.length??"?"} · ${this.todoExpanded?"Collapse":"Expand"}`,t,{onClick:()=>{this.todoExpanded=!this.todoExpanded;cx.notify();},children:todoDetails(snapshot,t,this.todoExpanded)}),...(runningJobs(snapshot.status.jobs)?.length?[section("Jobs",`${runningJobs(snapshot.status.jobs).length} running`,t,{children:runningJobs(snapshot.status.jobs).slice(0,100).map(job=>div().min_h(22).text_size(12).text_color(t.working).child(safeText(job.description??job.label,300)??"Job description unavailable"))})]:[]),...(isRecord(snapshot.status.stats)?[section("Stats",moneyText(snapshot.status.stats.cost)??"Session totals",t,{children:statsDetails(snapshot,t)})]:[])]:[section("Status",this.loading?"Loading":"Bridge unavailable",t,{children:[div().text_size(12).text_color(t.muted).child(this.error??"No recent bridge snapshot for this pane")]}),section("Changes","Snapshot unavailable",t,{onClick:()=>this.openPanel("changes"),children:[div().text_size(11).text_color(t.dim).child("Change details need a recent bridge snapshot")]}),section("Agents",`${agentsFor(target).length} Herdr agents · task history unavailable`,t,{onClick:()=>this.openPanel("agents"),children:agentDetails(null,t,target,true)}),section("TODO","TODO unavailable",t,{children:[div().text_size(12).text_color(t.dim).child("No recent bridge snapshot")]})];
+    return v_flex().id("gentle-herdr-sidebar").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13).child(h_flex().h(42).flex_none().px(12).gap(7).items_center().border_b(1).border_color(t.border).child(div().flex_1()).child(div().text_color(t.ansi5??t.accent).child("✿")).child(div().font_semibold().child("Gentle-Pi")).child(div().text_color(t.ansi5??t.accent).child("✿")).child(div().flex_1())).child(v_flex().id("gentle-herdr-sidebar-sections").flex_1().min_h(0).overflow_y_scrollbar().children(sections));
+  }
+}

@@ -149,6 +149,18 @@
                       }
                     },
                     {
+                      "id": "gentle-shell",
+                      "label": "Gentle Shell",
+                      "icon": "terminal",
+                      "group": "panels",
+                      "action": {
+                        "type": "panel",
+                        "container": "panel",
+                        "stack": "panel-body",
+                        "target": "gentle-shell"
+                      }
+                    },
+                    {
                       "id": "issues",
                       "label": "Issues",
                       "icon": "mods/branch-issue/icons/issue.svg",
@@ -257,6 +269,13 @@
                       "type": "block",
                       "content": {
                         "mod": "branch-issue"
+                      }
+                    },
+                    {
+                      "id": "gentle-shell",
+                      "type": "block",
+                      "content": {
+                        "mod": "gentle-herdr-sidebar"
                       }
                     }
                   ],
