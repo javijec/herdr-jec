@@ -439,8 +439,8 @@ export class Spaces {
       .rounded(4)
       .text_color(t.dim)
       .cursor_pointer()
-      .accessibility_label(`${folded ? "Show" : "Hide"} vitals for ${m ?? "this computer"}`)
-      .tooltip(`${folded ? "Show" : "Hide"} vitals`)
+      .accessibility_label(`${folded ? "Show" : "Hide"} metrics for ${m ?? "this computer"}`)
+      .tooltip(`${folded ? "Show" : "Hide"} metrics`)
       .hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_click((_e, cx) => {
         cx.stop_propagation();
@@ -457,7 +457,7 @@ export class Spaces {
       .pr(8)
       .gap(4)
       .items_center()
-      .when(!collapsed, (el) => el.child(div().flex_1().text_size(10).text_color(t.dim).child("Vitals")))
+      .when(!collapsed, (el) => el.child(div().flex_1()))
       .when(collapsed, (el) => el.child(div().flex_1()))
       .child(toggle);
     return folded ? [row] : [row, this.vitals.renderFor(m, collapsed)];
