@@ -154,7 +154,7 @@ export class MachineVitals {
       .min_w(0)
       .pl(narrow ? 2 : 12)
       .pr(8)
-      .pb(3)
+      .pb(7)
       .child(content);
   }
 }

@@ -4,7 +4,7 @@ Branch: `feat/per-machine-collapsible-vitals`
 
 ## Specs
 
-S1. User request: “quisiera que los vitals esten integrados en el machines, que tengan un bortoncito que les permita colapsarlos”; copy correction: “elimina la palabra vitals”; spacing correction: “tira toda la linea hacia la izquierda y que porque tiene mucho gap”; fold correction: “elimina el ocultar de vitals”
+S1. User request: “quisiera que los vitals esten integrados en el machines, que tengan un bortoncito que les permita colapsarlos”; copy correction: “elimina la palabra vitals”; spacing correction: “tira toda la linea hacia la izquierda y que porque tiene mucho gap”; fold correction: “elimina el ocultar de vitals”; bottom spacing correction: “dale un poco mas de espacio abajo de vitals”
 
 S2. User clarification: “perdon debajo de cada maquina”
 
@@ -28,3 +28,5 @@ L9. Reduced the expanded metrics inset from 28 px to 12 px in both the machine r
 L10. elimina el ocultar de vitals
 L11. The user selected “Quitar el plegado”; remove the per-metrics toggle while retaining the metrics and the existing machine-group fold control.
 L12. Removed the per-metrics toggle and obsolete fold-state reads/writes; syntax, sidebar mod check, and diff checks passed. The installed view hash matches source and switching `javijec` succeeded. Live UI interaction was not observed.
+L13. dale un poco mas de espacio abajo de vitals
+L14. Increased the metrics block's bottom padding from 3 to 7 px. Syntax and sidebar mod checks passed; the installed view hash matches and switching `javijec` succeeded. No live visual check was performed.
