@@ -1,6 +1,6 @@
 # Javijec
 
-Javijec is a complete Herdr workspace layout: a machine-aware sidebar, active terminal panes, and a right-hand stack of file, Git, pull-request, issue, and factory tools. It keeps the currently selected panel and uses the same light/dark themes on every machine. ![Javijec](preview.png)
+Javijec is a complete Herdr workspace layout: a machine-aware sidebar, active terminal panes, and a right-hand stack of file, Git, pull-request, and issue tools. It keeps the currently selected panel and uses the same light/dark themes on every machine. ![Javijec](preview.png)
 
 ## What you see
 
@@ -35,13 +35,12 @@ Custom mods included under `mods/`:
 - `better-git-graph` — Git history and branch graph.
 - `branch-pr` — GitHub pull-request panel.
 - `branch-issue` — Linear issue and worktree panel.
-- `factory` — Factory panel.
 - `workspace-status` — bottom workspace status.
 - `usage-limits` — provider usage limits.
 
 The package also includes the three custom theme files in `themes/`. It does not include global Herdr settings, personal shared state, or a workstation's key bindings.
 
-Programs and integrations: Git is used by the Git panels; `gh` is used by the pull-request integration; the package includes the Windows helpers `branch-pr/bin/herdr-pr.exe`, `branch-issue/bin/herdr-linear.exe`, and `factory/bin/factory.exe`; Windows PowerShell is used by Windows-specific machine/file helpers. The PR and Linear tools can contact remote services and perform actions; configure and authenticate them on the destination machine first.
+Programs and integrations: Git is used by the Git panels; `gh` is used by the pull-request integration; the package includes the Windows helpers `branch-pr/bin/herdr-pr.exe`, and `branch-issue/bin/herdr-linear.exe`; Windows PowerShell is used by Windows-specific machine/file helpers. The PR and Linear tools can contact remote services and perform actions; configure and authenticate them on the destination machine first.
 
 ## Watch out
 
@@ -54,7 +53,7 @@ Programs and integrations: Git is used by the Git panels; `gh` is used by the pu
 
 ## Done when
 
-1. `herdr-app check mods/<name>` passes for all twelve included mods.
+1. `herdr-app check mods/<name>` passes for all eleven included mods.
 2. `layouts/javijec.json` parses, and each mod referenced by it exists under `mods/`.
 3. The layout can be switched to with `herdr-app do layout.switch '{"name":"javijec"}'`.
 4. The screenshot `preview.png` shows the running Javijec layout.
