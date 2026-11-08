@@ -21,6 +21,7 @@ import { spaceFolder, checkoutKey, readCheckout } from "../git/checkouts.js";
 import { loadSettings, duration } from "../settings.js";
 import { findNode } from "./find-node.js";
 import { TEXT, Icon, IconButton, Badge } from "./ui.js";
+import { MachineVitals } from "./vitals.js";
 
 const rowHeight = ({ tree }) => (tree ? 28 : 30);
 
@@ -75,6 +76,14 @@ export class Spaces {
     this.pressed = null;
     this.over = null;
     this.machines = [];
+    this.vitals = new MachineVitals();
+    this.vitals.init(cx);
+    this.vitalsFolded = new Set();
+    try {
+      this.vitalsFolded = new Set(JSON.parse(localStorage.getItem("machines.vitals.folded") ?? "[]"));
+    } catch {
+      /* Ignore invalid saved UI state. */
+    }
     this.folded = new Set();
     try {
       this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
@@ -101,6 +110,7 @@ export class Spaces {
   checkNew(cx) {
     const now = Date.now();
     const sp = spaces();
+    this.updateVitalsTargets(cx);
     this.updateColors(sp);
     for (const s of sp) if (!this.shown.has(s.id)) this.born[s.id] ??= now;
     const ps = panes();
@@ -198,6 +208,17 @@ export class Spaces {
     }
   }
 
+  updateVitalsTargets(cx) {
+    const visibleSpaces = this.ordered();
+    const names = [
+      ...new Set([
+        ...visibleSpaces.map((space) => space.w.machine).filter(Boolean),
+        ...this.machines.map((machine) => machine.name).filter(Boolean),
+      ]),
+    ].sort();
+    this.vitals.setMachines(names, cx);
+  }
+
   // `key` and the other places in its repo (a commit there moves their ahead/behind).
   sameRepo(key, keys) {
     const repo = this.git[key]?.repo;
@@ -210,6 +231,7 @@ export class Spaces {
         const r = await hc(["machine", "ls", "--json"]);
         if (r.code === 0)
           this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary);
+        this.updateVitalsTargets(cx);
       } catch {
         // Keep the last machine list if core is temporarily unavailable.
       }
@@ -348,19 +370,22 @@ export class Spaces {
       ]),
     ].sort();
     if (!remote.length) {
+      const head = this.machineHeader(null, t, collapsed);
+      const vitals = this.machineVitals(null, t, collapsed);
       return this.machineLoading(null) && !rows.length
-        ? [this.loadingRow(null, t, collapsed)]
-        : rows.map(draw);
+        ? [head, ...vitals, this.loadingRow(null, t, collapsed)]
+        : [head, ...vitals, ...rows.map(draw)];
     }
     return [null, ...remote].flatMap((m) => {
       const head = this.machineHeader(m, t, collapsed);
       if (this.folded.has(m)) return [head];
+      const vitals = this.machineVitals(m, t, collapsed);
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
-      if (mine.length) return [head, ...mine.map(draw)];
+      if (mine.length) return [head, ...vitals, ...mine.map(draw)];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
         : this.newSpaceRow(m, t, collapsed);
-      return [head, placeholder];
+      return [head, ...vitals, placeholder];
     });
   }
 
@@ -399,6 +424,43 @@ export class Spaces {
       .on_click(() => run("space.new", { machine: m ?? "" }))
       .child(Icon("plus", 12))
       .when(!collapsed, (el) => el.child("New space there"));
+  }
+
+  machineVitals(m, t, collapsed) {
+    const key = m === null ? "local" : `remote:${m}`;
+    const folded = this.vitalsFolded.has(key);
+    const toggle = div()
+      .id(`machine-vitals-toggle-${key}`)
+      .size(20)
+      .flex_none()
+      .flex()
+      .items_center()
+      .justify_center()
+      .rounded(4)
+      .text_color(t.dim)
+      .cursor_pointer()
+      .accessibility_label(`${folded ? "Show" : "Hide"} vitals for ${m ?? "this computer"}`)
+      .tooltip(`${folded ? "Show" : "Hide"} vitals`)
+      .hover((s) => s.bg(t.hover).text_color(t.foreground))
+      .on_click((_e, cx) => {
+        cx.stop_propagation();
+        if (!this.vitalsFolded.delete(key)) this.vitalsFolded.add(key);
+        localStorage.setItem("machines.vitals.folded", JSON.stringify([...this.vitalsFolded]));
+        cx.notify();
+      })
+      .child(Icon(folded ? "chevron-right" : "chevron-down", 11));
+    const row = h_flex()
+      .id(`machine-vitals-header-${key}`)
+      .h(22)
+      .flex_none()
+      .pl(collapsed ? 2 : 28)
+      .pr(8)
+      .gap(4)
+      .items_center()
+      .when(!collapsed, (el) => el.child(div().flex_1().text_size(10).text_color(t.dim).child("Vitals")))
+      .when(collapsed, (el) => el.child(div().flex_1()))
+      .child(toggle);
+    return folded ? [row] : [row, this.vitals.renderFor(m, collapsed)];
   }
 
   machineHeader(m, t, collapsed) {
@@ -732,6 +794,7 @@ export class Spaces {
             }),
           ),
       )
+      .child(div().h(1).mx(10).bg(t.border).flex_none())
       .child(
         v_flex()
           .flex_1()

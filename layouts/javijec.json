@@ -53,16 +53,6 @@
                 "weight": 1
               },
               "min": 90
-            },
-            {
-              "id": "my-machine-vitals",
-              "type": "block",
-              "size": {
-                "px": 128
-              },
-              "content": {
-                "mod": "my-machine-vitals"
-              }
             }
           ]
         },

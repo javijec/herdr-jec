@@ -4,7 +4,7 @@ Javijec is a complete Herdr workspace layout: a machine-aware sidebar, active te
 
 ## What you see
 
-- **Left sidebar (268 px):** a 46 px workspace title bar; Spaces and Agents lists sharing the remaining height; a 128 px CPU/memory vitals panel; and a 28 px footer. The sidebar has a dark `chrome` background and can be resized from 44 to 480 px.
+- **Left sidebar (268 px):** a 46 px workspace title bar; Machines, Spaces, and Agents sharing the remaining height; collapsible CPU/memory vitals beneath each machine; and a 28 px footer. The sidebar has a dark `chrome` background and can be resized from 44 to 480 px.
 - **Top workspace row (42 px):** tabs and panel buttons for Files, Changes, Git Graph, Pull Requests, and Linear Issues.
 - **Center work area:** the active tab and its terminal panes. Each pane has an always-visible 30 px Better Changes header, an 8 px gap, a 10 px radius, a border, and an accent focus border.
 - **Right tool panel (368 px):** a resizable stack (280–900 px) containing Files, Changes, Git Graph, Pull Requests, and Linear Issues. The package defaults to Git Graph; the panel button selects another tool.
@@ -27,8 +27,8 @@ The layout tree is a root row with a 268 px sidebar and a flexible workspace col
 Custom mods included under `mods/`:
 
 - `workspace-chrome` — title/brand bar.
-- `my-better-sidebar` — machine-aware Spaces, Agents, and footer views.
-- `my-machine-vitals` — per-machine CPU and memory display.
+- `my-better-sidebar` — machine-aware Machines, Spaces, Agents, per-machine vitals, and footer views.
+- `my-machine-vitals` — CPU and memory sampling rendered inside the Machines list.
 - `better-tabs` — tab row and tool-panel buttons.
 - `better-files` — file browser.
 - `better-changes` — changes/commit panel and pane header.
