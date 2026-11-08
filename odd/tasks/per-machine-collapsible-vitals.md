@@ -12,7 +12,7 @@ S3. User authorization: “Medir todas las visibles” — “Extender las consu
 
 ## Tasks
 
-- T1 | S1-S3 | inline | commits `9f139f1` (`feat(sidebar): integrate per-machine collapsible vitals`), `28bb6ea` (`style(sidebar): remove Vitals label`), `64e805f` (`style(sidebar): reduce metrics indentation`), `fcb5fe3` (`feat(sidebar): remove per-metrics fold control`)
+- T1 | S1-S3 | inline | commits `9f139f1` (`feat(sidebar): integrate per-machine collapsible vitals`), `28bb6ea` (`style(sidebar): remove Vitals label`), `64e805f` (`style(sidebar): reduce metrics indentation`), `fcb5fe3` (`feat(sidebar): remove per-metrics fold control`), `7063563` (`style(sidebar): add space below metrics`)
 
 ## Log
 
