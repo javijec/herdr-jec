@@ -453,7 +453,7 @@ export class Spaces {
       .id(`machine-vitals-header-${key}`)
       .h(22)
       .flex_none()
-      .pl(collapsed ? 2 : 28)
+      .pl(collapsed ? 2 : 12)
       .pr(8)
       .gap(4)
       .items_center()

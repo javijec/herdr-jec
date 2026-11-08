@@ -152,7 +152,7 @@ export class MachineVitals {
       .w_full()
       .flex_none()
       .min_w(0)
-      .pl(narrow ? 2 : 28)
+      .pl(narrow ? 2 : 12)
       .pr(8)
       .pb(3)
       .child(content);
