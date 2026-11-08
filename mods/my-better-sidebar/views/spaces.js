@@ -78,12 +78,6 @@ export class Spaces {
     this.machines = [];
     this.vitals = new MachineVitals();
     this.vitals.init(cx);
-    this.vitalsFolded = new Set();
-    try {
-      this.vitalsFolded = new Set(JSON.parse(localStorage.getItem("machines.vitals.folded") ?? "[]"));
-    } catch {
-      /* Ignore invalid saved UI state. */
-    }
     this.folded = new Set();
     try {
       this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
@@ -371,21 +365,21 @@ export class Spaces {
     ].sort();
     if (!remote.length) {
       const head = this.machineHeader(null, t, collapsed);
-      const vitals = this.machineVitals(null, t, collapsed);
+      const metrics = this.vitals.renderFor(null, collapsed);
       return this.machineLoading(null) && !rows.length
-        ? [head, ...vitals, this.loadingRow(null, t, collapsed)]
-        : [head, ...vitals, ...rows.map(draw)];
+        ? [head, metrics, this.loadingRow(null, t, collapsed)]
+        : [head, metrics, ...rows.map(draw)];
     }
     return [null, ...remote].flatMap((m) => {
       const head = this.machineHeader(m, t, collapsed);
       if (this.folded.has(m)) return [head];
-      const vitals = this.machineVitals(m, t, collapsed);
+      const metrics = this.vitals.renderFor(m, collapsed);
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
-      if (mine.length) return [head, ...vitals, ...mine.map(draw)];
+      if (mine.length) return [head, metrics, ...mine.map(draw)];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
         : this.newSpaceRow(m, t, collapsed);
-      return [head, ...vitals, placeholder];
+      return [head, metrics, placeholder];
     });
   }
 
@@ -424,43 +418,6 @@ export class Spaces {
       .on_click(() => run("space.new", { machine: m ?? "" }))
       .child(Icon("plus", 12))
       .when(!collapsed, (el) => el.child("New space there"));
-  }
-
-  machineVitals(m, t, collapsed) {
-    const key = m === null ? "local" : `remote:${m}`;
-    const folded = this.vitalsFolded.has(key);
-    const toggle = div()
-      .id(`machine-vitals-toggle-${key}`)
-      .size(20)
-      .flex_none()
-      .flex()
-      .items_center()
-      .justify_center()
-      .rounded(4)
-      .text_color(t.dim)
-      .cursor_pointer()
-      .accessibility_label(`${folded ? "Show" : "Hide"} metrics for ${m ?? "this computer"}`)
-      .tooltip(`${folded ? "Show" : "Hide"} metrics`)
-      .hover((s) => s.bg(t.hover).text_color(t.foreground))
-      .on_click((_e, cx) => {
-        cx.stop_propagation();
-        if (!this.vitalsFolded.delete(key)) this.vitalsFolded.add(key);
-        localStorage.setItem("machines.vitals.folded", JSON.stringify([...this.vitalsFolded]));
-        cx.notify();
-      })
-      .child(Icon(folded ? "chevron-right" : "chevron-down", 11));
-    const row = h_flex()
-      .id(`machine-vitals-header-${key}`)
-      .h(22)
-      .flex_none()
-      .pl(collapsed ? 2 : 12)
-      .pr(8)
-      .gap(4)
-      .items_center()
-      .when(!collapsed, (el) => el.child(div().flex_1()))
-      .when(collapsed, (el) => el.child(div().flex_1()))
-      .child(toggle);
-    return folded ? [row] : [row, this.vitals.renderFor(m, collapsed)];
   }
 
   machineHeader(m, t, collapsed) {

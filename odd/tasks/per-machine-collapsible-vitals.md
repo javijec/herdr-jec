@@ -1,10 +1,10 @@
 # Per-machine collapsible vitals
-Feature: integrate machine vitals into the Machines list with per-machine collapse controls.
+Feature: show CPU/memory metrics beneath each machine in the Machines list.
 Branch: `feat/per-machine-collapsible-vitals`
 
 ## Specs
 
-S1. User request: “quisiera que los vitals esten integrados en el machines, que tengan un bortoncito que les permita colapsarlos”; copy correction: “elimina la palabra vitals”; spacing correction: “tira toda la linea hacia la izquierda y que porque tiene mucho gap”
+S1. User request: “quisiera que los vitals esten integrados en el machines, que tengan un bortoncito que les permita colapsarlos”; copy correction: “elimina la palabra vitals”; spacing correction: “tira toda la linea hacia la izquierda y que porque tiene mucho gap”; fold correction: “elimina el ocultar de vitals”
 
 S2. User clarification: “perdon debajo de cada maquina”
 
@@ -25,3 +25,6 @@ L6. elimina la palabra vitals
 L7. Follow-up verification: `node --check` and `herdr-app check mods/my-better-sidebar` passed; the installed view hash matches the source and switching `javijec` succeeded. No live visual interaction was observed.
 L8. tira toda la linea hacia la izquierda y que porque tiene mucho gap
 L9. Reduced the expanded metrics inset from 28 px to 12 px in both the machine row and metric rows. Syntax and mod checks passed; installed hashes matched and switching `javijec` succeeded. Live visual alignment was not observed.
+L10. elimina el ocultar de vitals
+L11. The user selected “Quitar el plegado”; remove the per-metrics toggle while retaining the metrics and the existing machine-group fold control.
+L12. Removed the per-metrics toggle and obsolete fold-state reads/writes; syntax, sidebar mod check, and diff checks passed. The installed view hash matches source and switching `javijec` succeeded. Live UI interaction was not observed.
