@@ -1,8 +1,8 @@
-# Herdr layout: Estro
+# Herdr layout: Javijec
 
-This folder is a portable package for the Estro layout. To install it on another PC, copy these contents into that PC's Herdr app home, preserving the folder structure:
+This folder is a portable package for the Javijec layout. To install it on another PC, copy these contents into that PC's Herdr app home, preserving the folder structure:
 
-- `layouts/estro.json` → `<HERDR_APP_HOME>/layouts/estro.json`
+- `layouts/javijec.json` → `<HERDR_APP_HOME>/layouts/javijec.json`
 - `mods/*` → `<HERDR_APP_HOME>/mods/`
 - `themes/*` → `<HERDR_APP_HOME>/themes/`
 - `RECIPE.md` and `preview.png` are the layout's share-page description and preview.
@@ -10,7 +10,7 @@ This folder is a portable package for the Estro layout. To install it on another
 Do not replace existing files with the same names without checking them first. After copying, run `herdr-app check mods/<name>` for each included mod, then switch with:
 
 ```powershell
-herdr-app do layout.switch '{"name":"estro"}'
+herdr-app do layout.switch '{"name":"javijec"}'
 ```
 
 The PR and Linear panels require their respective local CLI/helper and authentication. See [RECIPE.md](RECIPE.md) for the full list of integrations and limitations.
