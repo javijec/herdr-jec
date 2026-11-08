@@ -7,9 +7,10 @@ import { theme } from "herdr";
 export const TEXT = { button: 12, menu: 12.8, tab: 12.8 };
 
 // A bundled icon's name, or the path of another mod's.
-export const Icon = (name, size = 14) =>
+export const Icon = (name, size = 14, color = theme().muted) =>
   svg(name.includes("/") ? name : `mods/better-tabs/icons/${name}.svg`)
     .size(size)
+    .text_color(color)
     .flex_none();
 
 export function IconButton({ id, content, label, onClick }) {

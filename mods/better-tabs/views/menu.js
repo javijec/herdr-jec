@@ -34,7 +34,7 @@ export const menuMethods = {
       .cursor_pointer()
       .hover((s) => s.bg(t.hover))
       .when(drag?.active && drag.id === entry.id && !menu, (el) => el.opacity(0.35))
-      .when(Boolean(entry.icon), (el) => el.child(Icon(entry.icon)))
+      .when(Boolean(entry.icon), (el) => el.child(Icon(entry.icon, 14, active ? t.foreground : t.muted)))
       .child(
         div()
           .when(menu, (el) => el.flex_1().min_w(0).truncate())

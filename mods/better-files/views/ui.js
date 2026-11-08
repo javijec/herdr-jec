@@ -15,7 +15,7 @@ export const codeFont = () => settings().font_family ?? "JetBrains Mono";
 export const codeSize = () => settings().font_size ?? 14;
 
 export const Icon = (name, size = 14) =>
-  svg(`mods/better-files/icons/${name}.svg`).size(size).flex_none();
+  svg(`mods/better-files/icons/${name}.svg`).size(size).text_color(theme().muted).flex_none();
 
 // A sidebar panel's frame.
 export function Panel({ id }) {

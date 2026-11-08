@@ -405,7 +405,7 @@ export class Graph {
     return h_flex().id(id).h(24).px(6).gap(5).flex_none().items_center().rounded(6).text_size(11.5).cursor_pointer()
       .text_color(active ? t.foreground : t.muted).when(active, (e) => e.bg(t.selected)).hover((s) => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click(action)
-      .child(svg(icon(glyph)).size(13).flex_none()).when(Boolean(tip), (e) => e.child(tip));
+      .child(svg(icon(glyph)).size(13).flex_none().text_color(active ? t.foreground : t.muted)).when(Boolean(tip), (e) => e.child(tip));
   }
 
   header(t) {
@@ -415,7 +415,7 @@ export class Graph {
       .child(div().text_size(13).font_semibold().child("Git Graph"))
       // Which branch you're on, always in view.
       .when(ready && Boolean(where), (e) => e.child(h_flex().h(22).px(7).gap(5).min_w(0).items_center().rounded(6).bg(t.accent + "26").text_color(t.accent)
-        .child(svg(icon(this.current ? "branch" : "commit")).size(12).flex_none()).child(div().min_w(0).truncate().text_size(11.5).font_semibold().child(where))))
+        .child(svg(icon(this.current ? "branch" : "commit")).size(12).flex_none().text_color(t.accent)).child(div().min_w(0).truncate().text_size(11.5).font_semibold().child(where))))
       .child(div().flex_1())
       .when(ready && this.remoteNames?.length > 0, (e) => e.child(this.iconButton("graph-fetch", "fetch", this.fetching ? "Fetching…" : null, false, (_e, cx) => this.fetch(cx), t)))
       .when(this.state !== "nofolder", (e) => e.child(this.iconButton("graph-refresh", "refresh", null, false, (_e, cx) => this.refresh(cx), t)));

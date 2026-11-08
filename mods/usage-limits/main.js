@@ -194,7 +194,7 @@ export default class UsageLimits extends View {
         .children(numbers.map((n) => div().whitespace_nowrap().text_color(textColor(n.level, n.text, t)).child(n.text))));
       if (!model.empty) content.child(div().w(1).h(14).bg(t.border).flex_none());
     }
-    if (model.empty) content.child(div().id("ul-empty").child(svg(`mods/${MOD}/icons/gauge.svg`).size(14)));
+    if (model.empty) content.child(div().id("ul-empty").child(svg(`mods/${MOD}/icons/gauge.svg`).size(14).text_color(t.dim)));
     model.groups.forEach((g, i) => {
       if (i > 0) content.child(div().w(1).h(14).bg(t.border).flex_none());
       content.child(

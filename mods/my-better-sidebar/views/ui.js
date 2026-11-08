@@ -19,7 +19,7 @@ const RADIUS = { small: 4, control: 6, row: 7 };
 export const SIZE = { group: 30, menu: 31, row: 28, icon: 26, iconSmall: 20 };
 
 export const Icon = (name, size = 14) =>
-  svg(`mods/my-better-sidebar/icons/${name}.svg`).size(size).flex_none();
+  svg(`mods/my-better-sidebar/icons/${name}.svg`).size(size).text_color(theme().muted).flex_none();
 
 export function Badge(text) {
   const t = theme();
