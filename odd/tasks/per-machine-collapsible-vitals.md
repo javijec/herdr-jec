@@ -12,7 +12,7 @@ S3. User authorization: “Medir todas las visibles” — “Extender las consu
 
 ## Tasks
 
-- T1 | S1-S3 | inline | `feat(sidebar): integrate collapsible per-machine vitals`
+- T1 | S1-S3 | inline | commit `9f139f1` (`feat(sidebar): integrate per-machine collapsible vitals`)
 
 ## Log
 
