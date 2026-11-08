@@ -1,0 +1,5 @@
+{
+  "background": "#060407", "foreground": "#F6EFF3", "selection": "#28121E", "cursor": "#F6EFF3",
+  "ansi": ["#563040", "#FF718F", "#D2CBD0", "#F2B86D", "#A9C7EE", "#F43888", "#C49BFF", "#D2CBD0", "#76616B", "#FF718F", "#D2CBD0", "#E0C27A", "#A9C7EE", "#FF4F9A", "#C49BFF", "#F6EFF3"],
+  "colors": {"accent": "#F43888", "border": "#563040", "muted": "#A78E9B", "dim": "#76616B"}
+}

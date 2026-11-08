@@ -1,0 +1,20 @@
+{
+  "repository": "munza/herdr-mods",
+  "branch": "main",
+  "baseline_sha": "2bd4870634b8b0b86984651c98c30cf5be170e60",
+  "baseline_recorded_utc": "2026-11-08",
+  "layout_paths": [
+    "estro/"
+  ],
+  "mod_paths": [
+    "better-files/",
+    "better-sidebar/",
+    "better-tabs/",
+    "better-changes/",
+    "better-config/",
+    "branch-pr/",
+    "branch-issue/",
+    "hands/",
+    "factory/"
+  ]
+}

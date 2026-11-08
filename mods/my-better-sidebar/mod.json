@@ -1,0 +1,10 @@
+{
+  "$schema": "./mod.schema.json",
+  "version": "3.0.0",
+  "place": "none",
+  "title": "Better Sidebar",
+  "cloned_from": {
+    "name": "better-sidebar",
+    "version": "0.1.13"
+  }
+}
