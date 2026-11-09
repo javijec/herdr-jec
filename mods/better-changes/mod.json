@@ -1,6 +1,6 @@
 {
   "$schema": "./mod.schema.json",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "place": "right",
   "size": 368,
   "title": "Better Changes",
@@ -9,10 +9,5 @@
     "width": 1,
     "height": 1,
     "frame": "none"
-  },
-  "settings": {
-    "panel": {
-      "toggle": true
-    }
   }
 }

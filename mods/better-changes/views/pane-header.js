@@ -30,7 +30,7 @@ export const paneHeaderMethods = {
         cx.stop_propagation();
         run(command, args);
       })
-      .child(svg(`mods/better-changes/icons/${icon}.svg`).size(14).text_color(t.dim));
+      .child(svg(`mods/better-changes/icons/${icon}.svg`).size(14));
   },
 
   renderPaneHeader() {

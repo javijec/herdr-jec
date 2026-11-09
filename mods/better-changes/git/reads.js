@@ -13,7 +13,7 @@ export async function readStatus(git) {
     "--porcelain=v1",
     "-z",
     "--no-renames",
-    "--untracked-files=normal",
+    "--untracked-files=all",
   ]);
   if (status.code !== 0) throw Error(status.stderr || "Cannot read changes");
 

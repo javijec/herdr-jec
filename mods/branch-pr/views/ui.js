@@ -17,7 +17,7 @@ export const halfTone = (color) => `${color.slice(0, 7)}80`;
 export const codeFont = () => settings().font_family ?? "JetBrains Mono";
 
 export const Icon = (name, size = 14) =>
-  svg(`mods/branch-pr/icons/${name}.svg`).size(size).text_color(theme().muted).flex_none();
+  svg(`mods/branch-pr/icons/${name}.svg`).size(size).flex_none();
 
 // A sidebar panel's frame.
 export function Panel({ id }) {

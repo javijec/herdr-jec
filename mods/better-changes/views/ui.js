@@ -37,7 +37,7 @@ export const codeFont = () => settings().font_family ?? "JetBrains Mono";
 // The terminals' size, which a layout can set. Rows and columns of code grow with it.
 export const codeSize = () => settings().font_size ?? 14;
 
-export const Icon = (name, size = 14) => svg(`${ICONS}/${name}.svg`).size(size).text_color(theme().muted).flex_none();
+export const Icon = (name, size = 14) => svg(`${ICONS}/${name}.svg`).size(size).flex_none();
 
 // A folder's first column.
 export function Chevron(open) {

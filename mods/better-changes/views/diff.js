@@ -239,9 +239,10 @@ export const diffMethods = {
   },
 
   async readDiffContent(file, path, root, on) {
-    // A diff handed over whole, as Branch PR does with GitHub's patch for a PR file.
-    // Full file has no effect here: GitHub's patch contains only its hunks.
-    if (this.scope === "patch") return { lines: file.patch?.split("\n") ?? [NO_PATCH] };
+    // A diff handed over whole, as Branch PR does with GitHub's patch for a PR's file.
+    // shortcut: Full file has no effect here, GitHub's patch has only its hunks.
+    if (this.scope === "patch")
+      return { lines: file.patch?.split("\n") ?? [NO_PATCH] };
     if (file.fresh) return this.readFreshFile(path, root, on);
     if (file.conflict) {
       const { rows, message } = await this.readConflict(path, root, on);
