@@ -172,6 +172,7 @@ const CONTEXT_LINES = 3;
 // keeping its number in the file. A marker with no end stays plain text.
 function conflictParts(text) {
   const lines = text
+    .replace(/\r\n?/g, "\n")
     .replace(/\n$/, "")
     .split("\n")
     .map((text, index) => ({ text, line: index + 1 }));
