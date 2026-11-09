@@ -3,24 +3,401 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { collectSessionStats,countUserMessages,extractTodos,normalizeProviderUsage,parseJobsEvent,parseUsageSource,readAgentHistory } from "../bridge/session-data.mjs";
+import {
+  collectSessionStats,
+  countUserMessages,
+  extractTodos,
+  normalizeProviderUsage,
+  applyGentleAgentStatus,
+  parseGentleAgentStatusEvent,
+  parseJobsEvent,
+  parseUsageSource,
+  readAgentHistory,
+} from "../bridge/session-data.mjs";
 import { readChanges } from "../bridge/changes.mjs";
-import { buildSnapshot,publishSnapshot,removePresence } from "../bridge/snapshot.mjs";
+import { buildSnapshot, publishSnapshot, removePresence } from "../bridge/snapshot.mjs";
 import { emitHerdrStatus } from "../bridge/osc-status.mjs";
-const execFileAsync=promisify(execFile),UPDATE_DELAY_MS=250,POLL_INTERVAL_MS=15_000,USAGE_REFRESH_MS=300_000,USAGE_TIMEOUT_MS=3000,MAX_CHANGE_WORKTREES=20;
-function configHome(env=process.env){if(typeof env.GENTLE_SHELL_PREFIX==="string"&&path.isAbsolute(env.GENTLE_SHELL_PREFIX))return path.join(env.GENTLE_SHELL_PREFIX,"config","gentle-ai");if(env.GENTLE_PI_CONFIG_HOME)return env.GENTLE_PI_CONFIG_HOME;if(typeof env.GENTLE_SHELL_CONFIG_HOME==="string"&&path.isAbsolute(env.GENTLE_SHELL_CONFIG_HOME))return env.GENTLE_SHELL_CONFIG_HOME;return path.join(homedir(),".pi","gentle-ai");}
-function agentHome(env=process.env){return env.GENTLE_PI_AGENT_HOME||env.PI_CODING_AGENT_DIR||path.join(homedir(),".pi","agent");}
-async function statsVisible(){try{const raw=JSON.parse(await readFile(path.join(configHome(),"visual-customization.json"),"utf8"));return raw?.schema==="gentle-pi.visual-customization/v1"&&raw.visibility?.stats===true;}catch{return false;}}
-function contextEntries(ctx){try{return ctx.sessionManager.getEntries?.()??[];}catch{return [];}}
-function branchEntries(ctx){try{return ctx.sessionManager.getBranch?.()??contextEntries(ctx);}catch{return contextEntries(ctx);}}
-async function currentBranch(cwd){try{return (await execFileAsync("git",["branch","--show-current"],{cwd,timeout:1000,maxBuffer:4096,windowsHide:true})).stdout.trim()||undefined;}catch{return undefined;}}
-function cost(entries){let total=0,found=false;for(const e of entries??[])if(e?.type==="message"&&e.message?.role==="assistant"&&Number.isFinite(e.message.usage?.cost?.total)){total+=e.message.usage.cost.total;found=true;}return found?total:undefined;}
-function snapshotFor(ctx,state){const sessionId=ctx.sessionManager.getSessionId(),cwd=ctx.sessionManager.getCwd();if(typeof sessionId!=="string"||!sessionId||typeof cwd!=="string"||!cwd)return;const status={},model=ctx.model;if(model&&typeof model.provider==="string"&&typeof model.id==="string")status.model=`${model.provider}/${model.id}`;if(typeof ctx.thinkingLevel==="string"&&ctx.thinkingLevel)status.effort=ctx.thinkingLevel;const tokens=ctx.getContextUsage?.()?.tokens,capacity=model?.contextWindow;if(Number.isFinite(tokens)&&Number.isFinite(capacity)&&capacity>0)status.context={pct:Math.min(100,Math.max(0,Math.round(tokens/capacity*100)))};const total=cost(state.entries);if(total!==undefined)status.cost={usd:total};if(typeof state.agentState==="string")status.agentState=state.agentState;const name=ctx.sessionManager.getSessionName?.();if(typeof name==="string"&&name)status.sessionName=name;const todos=extractTodos(state.branch,state.currentTurn);if(todos)status.todos=todos;status.agents={items:state.agentHistory?.items??[],liveAvailable:false,historyAvailable:state.agentHistory?.historyAvailable===true,...(state.agentHistory?.historyPartial?{historyPartial:true}:{})};if(state.jobs?.length)status.jobs=state.jobs;if(state.usage.size)status.usage=[...state.usage.values()];return {sessionId,cwd,status};}
-async function fetchUsage(source,ctx){const controller=new AbortController();let timer;const timeout=new Promise(resolve=>{timer=setTimeout(()=>{controller.abort();resolve(undefined);},USAGE_TIMEOUT_MS);});const boundedFetch=(input,init={})=>globalThis.fetch(input,{...init,signal:init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal});const work=(async()=>{const apiKey=await ctx.modelRegistry?.getApiKeyForProvider?.(source.provider).catch(()=>undefined);if(controller.signal.aborted)return;return normalizeProviderUsage(await source.fetch(apiKey,boundedFetch,Date.now()),source.provider);})();try{return await Promise.race([work,timeout]);}catch{return;}finally{clearTimeout(timer);controller.abort();}}
-export default function gentleHerdrBridge(pi,oscOptions){const outputDirectory=path.resolve(process.env.GENTLE_HERDR_DIR||path.join(homedir(),".gentle-herdr")),sources=new Map(),usage=new Map(),usageFetched=new Map(),usageBusy=new Set();let active=false,agentState,currentTurn=0,latestJobs=[],pendingJobs,latestContext,timer,pollTimer,pendingContext,queue=Promise.resolve();
-function enqueue(ctx){const sessionId=ctx.sessionManager.getSessionId(),entries=contextEntries(ctx),branch=branchEntries(ctx),state={entries,branch,currentTurn,agentState,jobs:latestJobs,usage,worktreeCwds:[]};queue=queue.then(async()=>{const cwd=ctx.sessionManager.getCwd();if(!sessionId||!cwd)return;const history=await readAgentHistory(path.join(agentHome(),"gentle-agents","tasks"),sessionId);state.agentHistory=history;state.worktreeCwds=history.worktreeCwds?.slice(0,MAX_CHANGE_WORKTREES)??[];const [showStats,changes,branchName]=await Promise.all([statsVisible(),readChanges(cwd,state.worktreeCwds).catch(()=>undefined),currentBranch(cwd)]);const current=snapshotFor(ctx,state);if(!current)return;if(showStats)current.status.stats=collectSessionStats(entries,history.subagents?.runs>0?history.subagents:undefined);if(changes)current.status.changes=changes;await publishSnapshot(outputDirectory,buildSnapshot({...current,branch:branchName,updatedAt:new Date().toISOString()}));});queue=queue.catch(error=>console.warn("gentle-herdr-bridge: snapshot update failed",error));return queue;}
-function schedule(ctx){if(!active)return;latestContext=pendingContext=ctx;if(timer)return;timer=setTimeout(()=>{timer=undefined;const latest=pendingContext;pendingContext=undefined;if(latest)void enqueue(latest);},UPDATE_DELAY_MS);timer.unref?.();}
-function refreshUsage(ctx,force){if(!active)return;for(const [provider,source] of sources){if(force&&provider!==force)continue;if(usageBusy.has(provider)||(!force&&Date.now()-(usageFetched.get(provider)??0)<USAGE_REFRESH_MS))continue;usageFetched.set(provider,Date.now());usageBusy.add(provider);void fetchUsage(source,ctx).then(value=>{if(value)usage.set(provider,value);}).finally(()=>{usageBusy.delete(provider);schedule(latestContext??ctx);});}}
-function poll(ctx){if(!active||pollTimer)return;pollTimer=setTimeout(()=>{pollTimer=undefined;const latest=latestContext??ctx;if(!active||!latest)return;schedule(latest);refreshUsage(latest);poll(latest);},POLL_INTERVAL_MS);pollTimer.unref?.();}
-const subscribe=(event,handler)=>pi.events?.on?.(event,handler);subscribe("gentle-ai:jobs-sidebar",value=>{try{const id=value?.sessionId;if(typeof id!=="string")return;const jobs=parseJobsEvent(value,id);if(jobs===undefined)return;if(!active){pendingJobs={sessionId:id,jobs};return;}if(latestContext?.sessionManager?.getSessionId?.()!==id)return;latestJobs=jobs;schedule(latestContext);}catch{}});subscribe("gentle-pi:usage-source/v1",value=>{const source=parseUsageSource(value);if(!source)return;sources.set(source.provider,source);if(active&&latestContext)refreshUsage(latestContext,source.provider);});
-pi.on("session_start",(_e,ctx)=>{active=true;latestContext=ctx;const id=ctx.sessionManager.getSessionId();latestJobs=pendingJobs?.sessionId===id?pendingJobs.jobs:[];pendingJobs=undefined;currentTurn=countUserMessages(branchEntries(ctx));agentState=ctx.isIdle?.()===false?"working":"idle";emitHerdrStatus(agentState,oscOptions);schedule(ctx);refreshUsage(ctx);poll(ctx);});for(const event of ["model_select","thinking_level_select","session_info_changed","turn_end","tool_execution_end"])pi.on(event,(_e,ctx)=>schedule(ctx));pi.on("before_agent_start",(_e,ctx)=>{currentTurn++;schedule(ctx);});pi.on("session_tree",(_e,ctx)=>{currentTurn=countUserMessages(branchEntries(ctx));schedule(ctx);});pi.on("agent_start",(_e,ctx)=>{agentState="working";emitHerdrStatus(agentState,oscOptions);schedule(ctx);});pi.on("agent_settled",(_e,ctx)=>{agentState="idle";emitHerdrStatus(agentState,oscOptions);schedule(ctx);});pi.on("session_shutdown",async(_e,ctx)=>{active=false;emitHerdrStatus("done",oscOptions);if(timer){clearTimeout(timer);timer=undefined;}if(pollTimer){clearTimeout(pollTimer);pollTimer=undefined;}const latest=pendingContext??ctx;pendingContext=undefined;if(latest)await enqueue(latest);await queue;const id=latest?.sessionManager?.getSessionId?.();if(typeof id==="string"&&id)await removePresence(outputDirectory,id).catch(error=>console.warn("gentle-herdr-bridge: presence cleanup failed",error));latestContext=undefined;latestJobs=[];});}
+
+const execFileAsync = promisify(execFile);
+const UPDATE_DELAY_MS = 250;
+const POLL_INTERVAL_MS = 15_000;
+const USAGE_REFRESH_MS = 5 * 60_000;
+const USAGE_TIMEOUT_MS = 3_000;
+const MAX_CHANGE_WORKTREES = 20;
+const VISUAL_SCHEMA = "gentle-pi.visual-customization/v1";
+const VISIBILITY_KEYS = ["changes", "rdd", "agents", "todo", "usageCost", "modelDetails", "contextWarning", "stats"];
+const REQUIRED_VISIBILITY_KEYS = ["changes", "agents", "todo", "usageCost", "modelDetails"];
+
+function errorCode(error) {
+  return typeof error?.code === "string" ? error.code : "UNKNOWN";
+}
+
+function sessionCost(entries) {
+  let total = 0;
+  let found = false;
+  for (const entry of entries ?? []) {
+    if (entry?.type !== "message" || entry.message?.role !== "assistant") continue;
+    const cost = entry.message.usage?.cost?.total;
+    if (!Number.isFinite(cost)) continue;
+    total += cost;
+    found = true;
+  }
+  return found ? total : undefined;
+}
+
+function modelName(model) {
+  if (!model || typeof model.provider !== "string" || typeof model.id !== "string") return undefined;
+  return `${model.provider}/${model.id}`;
+}
+
+function contextPercent(ctx) {
+  const tokens = ctx.getContextUsage?.()?.tokens;
+  const capacity = ctx.model?.contextWindow;
+  if (!Number.isFinite(tokens) || !Number.isFinite(capacity) || capacity <= 0) return undefined;
+  return Math.min(100, Math.max(0, Math.round((tokens / capacity) * 100)));
+}
+
+function configHome(env = process.env) {
+  if (typeof env.GENTLE_SHELL_PREFIX === "string" && path.isAbsolute(env.GENTLE_SHELL_PREFIX)) {
+    return path.join(env.GENTLE_SHELL_PREFIX, "config", "gentle-ai");
+  }
+  if (typeof env.GENTLE_PI_CONFIG_HOME === "string" && env.GENTLE_PI_CONFIG_HOME.length > 0) return env.GENTLE_PI_CONFIG_HOME;
+  if (typeof env.GENTLE_SHELL_CONFIG_HOME === "string" && path.isAbsolute(env.GENTLE_SHELL_CONFIG_HOME)) return env.GENTLE_SHELL_CONFIG_HOME;
+  return path.join(homedir(), ".pi", "gentle-ai");
+}
+
+function agentHome(env = process.env) {
+  if (typeof env.GENTLE_PI_AGENT_HOME === "string" && env.GENTLE_PI_AGENT_HOME.length > 0) return env.GENTLE_PI_AGENT_HOME;
+  if (typeof env.PI_CODING_AGENT_DIR === "string" && env.PI_CODING_AGENT_DIR.length > 0) return env.PI_CODING_AGENT_DIR;
+  return path.join(homedir(), ".pi", "agent");
+}
+
+async function statsVisible() {
+  try {
+    const raw = JSON.parse(await readFile(path.join(configHome(), "visual-customization.json"), "utf8"));
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || raw.schema !== VISUAL_SCHEMA || Object.keys(raw).some((key) => !["schema", "statusPlacement", "headerPlacement", "density", "surface", "visibility"].includes(key))) return false;
+    if (!["auto", "right", "bottom", "hidden"].includes(raw.statusPlacement) || !["top", "below-input", "split"].includes(raw.headerPlacement) || !["comfortable", "compact", "minimal"].includes(raw.density)) return false;
+    if (raw.surface !== undefined && !["tinted", "transparent"].includes(raw.surface)) return false;
+    const visibility = raw.visibility;
+    if (!visibility || typeof visibility !== "object" || Array.isArray(visibility)) return false;
+    const keys = Object.keys(visibility);
+    if (keys.some((key) => !VISIBILITY_KEYS.includes(key)) || REQUIRED_VISIBILITY_KEYS.some((key) => !Object.hasOwn(visibility, key))) return false;
+    if (keys.some((key) => typeof visibility[key] !== "boolean")) return false;
+    return visibility.stats === true;
+  } catch {
+    return false;
+  }
+}
+
+function contextEntries(ctx) {
+  try {
+    return ctx.sessionManager.getEntries?.() ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function branchEntries(ctx) {
+  try {
+    return ctx.sessionManager.getBranch?.() ?? contextEntries(ctx);
+  } catch {
+    return contextEntries(ctx);
+  }
+}
+
+async function currentBranch(cwd) {
+  try {
+    const { stdout } = await execFileAsync("git", ["branch", "--show-current"], {
+      cwd,
+      timeout: 1000,
+      maxBuffer: 4096,
+      windowsHide: true,
+    });
+    const branch = stdout.trim();
+    return branch || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function fetchUsage(source, ctx) {
+  const controller = new AbortController();
+  let timeout;
+  const timeoutResult = new Promise((resolve) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      resolve(undefined);
+    }, USAGE_TIMEOUT_MS);
+  });
+  const boundedFetch = (input, init = {}) => {
+    const signal = init.signal ? AbortSignal.any([controller.signal, init.signal]) : controller.signal;
+    return globalThis.fetch(input, { ...init, signal });
+  };
+  const work = (async () => {
+    const apiKey = await ctx.modelRegistry?.getApiKeyForProvider?.(source.provider).catch(() => undefined);
+    if (controller.signal.aborted) return undefined;
+    const value = await source.fetch(apiKey, boundedFetch, Date.now());
+    return normalizeProviderUsage(value, source.provider);
+  })();
+  try {
+    return await Promise.race([work, timeoutResult]);
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+  }
+}
+
+function snapshotFor(ctx, state) {
+  const sessionId = ctx.sessionManager.getSessionId();
+  const cwd = ctx.sessionManager.getCwd();
+  if (typeof sessionId !== "string" || sessionId.length === 0) return undefined;
+  if (typeof cwd !== "string" || cwd.length === 0) return undefined;
+
+  const status = {};
+  const model = modelName(ctx.model);
+  if (model) status.model = model;
+  if (typeof ctx.thinkingLevel === "string" && ctx.thinkingLevel.length > 0) status.effort = ctx.thinkingLevel;
+  const pct = contextPercent(ctx);
+  if (pct !== undefined) status.context = { pct };
+  const cost = sessionCost(state.entries);
+  if (cost !== undefined) status.cost = { usd: cost };
+  if (typeof state.agentState === "string") status.agentState = state.agentState;
+  const sessionName = ctx.sessionManager.getSessionName?.();
+  if (typeof sessionName === "string" && sessionName.length > 0) status.sessionName = sessionName;
+
+  const todos = extractTodos(state.branch, state.currentTurn);
+  if (todos) status.todos = todos;
+  const labelsByTaskId = new Map((state.agentHistory?.liveTasks ?? []).map((task) => [task.id, task.label]));
+  status.agents = {
+    items: state.agentHistory?.items ?? [],
+    liveAvailable: state.liveAgentStatusAvailable === true,
+    liveTasks: (state.liveAgentTasks ?? []).map((task) => {
+      const label = labelsByTaskId.get(task.id);
+      return label ? { ...task, label } : task;
+    }),
+    historyAvailable: state.agentHistory?.historyAvailable === true,
+    ...(state.agentHistory?.historyPartial ? { historyPartial: true } : {}),
+  };
+  if (state.jobs?.length) status.jobs = state.jobs;
+  if (state.usage.size > 0) status.usage = [...state.usage.values()];
+  return { sessionId, cwd, status, entries: state.entries, worktreeCwds: state.worktreeCwds ?? [] };
+}
+
+export default function gentleHerdrBridge(pi, oscOptions) {
+  const outputDirectory = path.resolve(process.env.GENTLE_HERDR_DIR || path.join(homedir(), ".gentle-herdr"));
+  const usageSources = new Map();
+  const usage = new Map();
+  const usageFetchedAt = new Map();
+  const usageInFlight = new Set();
+  let active = false;
+  let agentState;
+  let currentTurn = 0;
+  let latestJobs = [];
+  let liveAgentTasks = [];
+  let liveAgentStatusSeen = false;
+  let pendingJobs;
+  let latestContext;
+  let timer;
+  let pollTimer;
+  let pendingContext;
+  let writeQueue = Promise.resolve();
+
+  function enqueueSnapshot(ctx) {
+    const sessionId = ctx.sessionManager.getSessionId();
+    const entries = contextEntries(ctx);
+    const branch = branchEntries(ctx);
+    const prepared = {
+      entries,
+      branch,
+      currentTurn,
+      agentState,
+      jobs: latestJobs,
+      liveAgentTasks,
+      liveAgentStatusAvailable: liveAgentStatusSeen,
+      usage,
+      worktreeCwds: [],
+    };
+    writeQueue = writeQueue.then(async () => {
+      const cwd = ctx.sessionManager.getCwd();
+      if (typeof sessionId !== "string" || !sessionId || typeof cwd !== "string" || !cwd) return;
+      const history = await readAgentHistory(path.join(agentHome(), "gentle-agents", "tasks"), sessionId);
+      prepared.agentHistory = history;
+      prepared.worktreeCwds = history?.worktreeCwds?.slice(0, MAX_CHANGE_WORKTREES) ?? [];
+      const [showStats, changes, branchName] = await Promise.all([
+        statsVisible(),
+        readChanges(cwd, prepared.worktreeCwds).catch(() => undefined),
+        currentBranch(cwd),
+      ]);
+      const current = snapshotFor(ctx, prepared);
+      if (!current) return;
+      if (showStats) {
+        const subagents = history?.subagents?.runs > 0 ? history.subagents : undefined;
+        current.status.stats = collectSessionStats(entries, subagents);
+      }
+      if (changes) current.status.changes = changes;
+      const snapshot = buildSnapshot({
+        sessionId: current.sessionId,
+        cwd: current.cwd,
+        branch: branchName,
+        status: current.status,
+        updatedAt: new Date().toISOString(),
+      });
+      await publishSnapshot(outputDirectory, snapshot);
+    });
+    writeQueue = writeQueue.catch((error) => {
+      console.warn("gentle-herdr-bridge: snapshot update failed", errorCode(error));
+    });
+    return writeQueue;
+  }
+
+  function scheduleSnapshot(ctx) {
+    if (!active) return;
+    latestContext = ctx;
+    pendingContext = ctx;
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = undefined;
+      const latest = pendingContext;
+      pendingContext = undefined;
+      if (latest) void enqueueSnapshot(latest);
+    }, UPDATE_DELAY_MS);
+    timer.unref?.();
+  }
+
+  function refreshUsage(ctx, forceProvider) {
+    if (!active) return;
+    const now = Date.now();
+    for (const [provider, source] of usageSources) {
+      if (forceProvider && provider !== forceProvider) continue;
+      if (usageInFlight.has(provider) || (!forceProvider && now - (usageFetchedAt.get(provider) ?? 0) < USAGE_REFRESH_MS)) continue;
+      usageFetchedAt.set(provider, now);
+      usageInFlight.add(provider);
+      void fetchUsage(source, ctx).then((result) => {
+        if (result) usage.set(provider, result);
+      }).catch(() => {}).finally(() => {
+        usageInFlight.delete(provider);
+        scheduleSnapshot(latestContext ?? ctx);
+      });
+    }
+  }
+
+  function schedulePoll(ctx) {
+    if (!active || pollTimer) return;
+    pollTimer = setTimeout(() => {
+      pollTimer = undefined;
+      const latest = latestContext ?? ctx;
+      if (!active || !latest) return;
+      scheduleSnapshot(latest);
+      refreshUsage(latest);
+      schedulePoll(latest);
+    }, POLL_INTERVAL_MS);
+    pollTimer.unref?.();
+  }
+
+  const unsubscribe = [];
+  const subscribe = (name, handler) => {
+    const stop = pi.events?.on?.(name, handler);
+    if (typeof stop === "function") unsubscribe.push(stop);
+  };
+
+  subscribe("gentle-ai:jobs-sidebar", (value) => {
+    try {
+      const eventSessionId = value?.sessionId;
+      if (typeof eventSessionId !== "string") return;
+      const jobs = parseJobsEvent(value, eventSessionId);
+      if (jobs === undefined) return;
+      if (!active) {
+        pendingJobs = { sessionId: eventSessionId, jobs };
+        return;
+      }
+      const sessionId = latestContext?.sessionManager?.getSessionId?.();
+      if (sessionId !== eventSessionId) return;
+      latestJobs = jobs;
+      scheduleSnapshot(latestContext);
+    } catch {
+      // A malformed event from another extension must not break this session.
+    }
+  });
+  subscribe("gentle-pi:notification:source", (value) => {
+    if (!active || !latestContext) return;
+    const sessionId = latestContext.sessionManager.getSessionId();
+    const event = parseGentleAgentStatusEvent(value, sessionId);
+    if (!event) return;
+    liveAgentStatusSeen = true;
+    liveAgentTasks = applyGentleAgentStatus(liveAgentTasks, event);
+    scheduleSnapshot(latestContext);
+  });
+  subscribe("gentle-pi:usage-source/v1", (value) => {
+    const source = parseUsageSource(value);
+    if (!source) return;
+    usageSources.set(source.provider, source);
+    if (active && latestContext) refreshUsage(latestContext, source.provider);
+  });
+
+  pi.on("session_start", (_event, ctx) => {
+    active = true;
+    latestContext = ctx;
+    const sessionId = ctx.sessionManager.getSessionId();
+    latestJobs = pendingJobs?.sessionId === sessionId ? pendingJobs.jobs : [];
+    liveAgentTasks = [];
+    liveAgentStatusSeen = false;
+    pendingJobs = undefined;
+    currentTurn = countUserMessages(branchEntries(ctx));
+    agentState = ctx.isIdle?.() === false ? "working" : "idle";
+    emitHerdrStatus(agentState, oscOptions);
+    scheduleSnapshot(ctx);
+    refreshUsage(ctx);
+    schedulePoll(ctx);
+  });
+  pi.on("model_select", (_event, ctx) => scheduleSnapshot(ctx));
+  pi.on("thinking_level_select", (_event, ctx) => scheduleSnapshot(ctx));
+  pi.on("session_info_changed", (_event, ctx) => scheduleSnapshot(ctx));
+  pi.on("turn_end", (_event, ctx) => scheduleSnapshot(ctx));
+  pi.on("tool_execution_end", (_event, ctx) => scheduleSnapshot(ctx));
+  pi.on("before_agent_start", (_event, ctx) => {
+    currentTurn += 1;
+    scheduleSnapshot(ctx);
+  });
+  pi.on("session_tree", (_event, ctx) => {
+    currentTurn = countUserMessages(branchEntries(ctx));
+    scheduleSnapshot(ctx);
+  });
+  pi.on("agent_start", (_event, ctx) => {
+    agentState = "working";
+    emitHerdrStatus(agentState, oscOptions);
+    scheduleSnapshot(ctx);
+  });
+  pi.on("agent_settled", (_event, ctx) => {
+    agentState = "idle";
+    emitHerdrStatus(agentState, oscOptions);
+    scheduleSnapshot(ctx);
+  });
+  pi.on("session_shutdown", async (_event, ctx) => {
+    active = false;
+    emitHerdrStatus("done", oscOptions);
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = undefined;
+    }
+    const latest = pendingContext ?? ctx;
+    pendingContext = undefined;
+    if (latest) await enqueueSnapshot(latest);
+    await writeQueue;
+    const sessionId = latest?.sessionManager?.getSessionId?.();
+    if (typeof sessionId === "string" && sessionId.length > 0) {
+      await removePresence(outputDirectory, sessionId).catch((error) => {
+        console.warn("gentle-herdr-bridge: presence cleanup failed", errorCode(error));
+      });
+    }
+    latestContext = undefined;
+    latestJobs = [];
+    liveAgentTasks = [];
+    liveAgentStatusSeen = false;
+  });
+}
