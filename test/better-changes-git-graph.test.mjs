@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { graphFocusHandle, graphLocation, graphOverlay, graphOverlayMode, graphViewForTab } from "../mods/better-changes/git-graph/host.js";
+import { graphFocusHandle, graphLocation, graphOverlay, graphOverlayMode, graphPollInterval, graphViewForTab } from "../mods/better-changes/git-graph/host.js";
 import { resizedDetailsHeight } from "../mods/better-changes/git-graph/details.js";
 
 test("the existing Commits tab routes to the embedded graph, not the old list", () => {
@@ -53,4 +53,12 @@ test("commit details resize upward and downward within the available graph heigh
   assert.equal(resizedDetailsHeight(320, 100, 800), 220);
   assert.equal(resizedDetailsHeight(320, -1000, 800), 700);
   assert.equal(resizedDetailsHeight(320, 1000, 800), 120);
+});
+
+test("embedded Git Graph uses the configured Better Changes refresh interval", () => {
+  assert.equal(graphPollInterval(true, 10000), 10000);
+  assert.equal(graphPollInterval(true, 30000), 30000);
+  assert.equal(graphPollInterval(true), 10000);
+  assert.equal(graphPollInterval(false), 15000);
+  assert.equal(graphPollInterval(true, 500), 1000);
 });

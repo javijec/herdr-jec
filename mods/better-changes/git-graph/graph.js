@@ -9,7 +9,7 @@ import { READ, STATUS, UNCOMMITTED, LABEL, logArgs, parseLog, parseStatus, withU
   menuFor, menuHeight, fileArgs, joinFiles, diffArgs, diffRows } from "./git.js";
 import { perform, openDialog, showChanges } from "./act.js";
 import { icon } from "./menu.js";
-import { graphFocusHandle, graphLocation, graphOverlay } from "./host.js";
+import { graphFocusHandle, graphLocation, graphOverlay, graphPollInterval } from "./host.js";
 import { resizedDetailsHeight } from "./details.js";
 
 function location(folder) {
@@ -83,7 +83,7 @@ async function readFolder(cwd, on, { all, remotes, limit }) {
 }
 
 export class Graph {
-  init(cx, { getLocation = null, embedded = false, focusHandle = null } = {}) {
+  init(cx, { getLocation = null, embedded = false, focusHandle = null, refreshIntervalMs = null } = {}) {
     this.getLocation = getLocation;
     this.embedded = embedded;
     this.detailsHeight = 320;
@@ -100,7 +100,18 @@ export class Graph {
     this.refresh(cx);
     if (!this.embedded) cx.timer.after(1500, (cx) => this.warm(cx));
     // Remote spaces can't be watched: poll them gently. New folders get read ahead.
-    cx.timer.every(15000, (cx) => { if (!this.watching) this.refresh(cx); if (!this.embedded) this.warm(cx); });
+    this.setRefreshInterval(refreshIntervalMs, cx);
+  }
+
+  setRefreshInterval(refreshIntervalMs, cx) {
+    const interval = graphPollInterval(this.embedded, refreshIntervalMs);
+    if (interval === this.refreshIntervalMs && this.refreshTimer) return;
+    this.refreshTimer?.cancel();
+    this.refreshIntervalMs = interval;
+    this.refreshTimer = cx.timer.every(interval, (cx) => {
+      if (!this.watching) this.refresh(cx);
+      if (!this.embedded) this.warm(cx);
+    });
   }
 
   sourceLocation() { return this.getLocation ? graphLocation(this.getLocation) : location(this.folder); }

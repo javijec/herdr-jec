@@ -2,6 +2,12 @@ export function graphViewForTab(tab) {
   return tab === "commit" ? "git-graph" : "changes";
 }
 
+export function graphPollInterval(embedded, refreshIntervalMs) {
+  if (Number.isFinite(refreshIntervalMs) && refreshIntervalMs > 0)
+    return Math.max(1000, refreshIntervalMs);
+  return embedded ? 10000 : 15000;
+}
+
 // Embedded Graphs reuse a handle created by the owning View's init context.
 export function graphFocusHandle(cx, focusHandle) {
   return focusHandle ?? cx.focus_handle();

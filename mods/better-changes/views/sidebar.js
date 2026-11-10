@@ -52,7 +52,12 @@ export const sidebarMethods = {
   ensureGitGraph(cx) {
     if (this.gitGraph) return;
     this.gitGraph = new GitGraph();
-    this.gitGraph.init(cx, { getLocation: () => this.location(), embedded: true, focusHandle: this.gitGraphFocus });
+    this.gitGraph.init(cx, {
+      getLocation: () => this.location(),
+      embedded: true,
+      focusHandle: this.gitGraphFocus,
+      refreshIntervalMs: this.statusPollInterval,
+    });
   },
 
   renderGitGraph(cx) {

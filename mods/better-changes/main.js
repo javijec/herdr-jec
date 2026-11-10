@@ -54,6 +54,7 @@ class BetterChanges extends View {
     this.diffSpace = p.space;
     this.source = p.source;
     this.settings = DEFAULT_SETTINGS;
+    this.statusPollInterval = STATUS_POLL_MS;
     this.restoreDiffSelection(p);
     // Better Tabs draws this on the diff tab.
     setShared("mod-icons", {
@@ -139,6 +140,8 @@ class BetterChanges extends View {
       for (const key of Object.keys(settings.limits))
         if (!(settings.limits[key] > 0)) settings.limits[key] = DEFAULT_SETTINGS.limits[key];
       this.settings = settings;
+      this.statusPollInterval = Math.max(1000, duration(settings.refresh.status, STATUS_POLL_MS));
+      this.gitGraph?.setRefreshInterval(this.statusPollInterval, cx);
       if (localStorage.getItem("view") === null && ["tree", "flat"].includes(settings.default.view))
         this.view = settings.default.view;
       if (
@@ -150,9 +153,7 @@ class BetterChanges extends View {
         setShared("better-changes.diff-layout", this.diffLayout);
       }
       // A floor, so a bare number read as milliseconds cannot spin Git.
-      cx.timer.every(Math.max(1000, duration(settings.refresh.status, STATUS_POLL_MS)), (cx) =>
-        this.refresh(cx),
-      );
+      cx.timer.every(this.statusPollInterval, (cx) => this.refresh(cx));
       cx.notify();
     });
   }
