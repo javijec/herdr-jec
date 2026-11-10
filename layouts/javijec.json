@@ -125,18 +125,6 @@
                       }
                     },
                     {
-                      "id": "git-graph",
-                      "label": "Git Graph",
-                      "icon": "mods/better-git-graph/icons/graph.svg",
-                      "group": "panels",
-                      "action": {
-                        "type": "panel",
-                        "container": "panel",
-                        "stack": "panel-body",
-                        "target": "git-graph"
-                      }
-                    },
-                    {
                       "id": "prs",
                       "label": "PRs",
                       "icon": "mods/branch-pr/icons/pull-request.svg",
@@ -251,13 +239,6 @@
                       }
                     },
                     {
-                      "id": "git-graph",
-                      "type": "block",
-                      "content": {
-                        "mod": "better-git-graph"
-                      }
-                    },
-                    {
                       "id": "pull-requests",
                       "type": "block",
                       "content": {
@@ -279,7 +260,7 @@
                       }
                     }
                   ],
-                  "active": "git-graph"
+                  "active": "changes"
                 }
               ],
               "size": {

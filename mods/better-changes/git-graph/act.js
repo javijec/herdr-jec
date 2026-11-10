@@ -1,5 +1,6 @@
 import { exec, notify, setShared, openOverlay, run } from "herdr";
 import { commandsFor, dialogFor, dialogHeight, doneText, gitError } from "./git.js";
+import { graphOverlay } from "./host.js";
 
 // Runs an action's git commands in order, stopping at the first failure. Every
 // graph copy refreshes after, whether or not its folder watch saw the change.
@@ -21,6 +22,9 @@ export async function perform(action, values, ctx, { toast = true } = {}) {
     return { ok: false, message };
   } finally {
     setShared("git-graph.changed", Date.now());
+    if (ctx?.betterChanges) {
+      setShared("better-changes.reload", { root: ctx.root, on: ctx.on ?? null, at: Date.now() });
+    }
   }
 }
 
@@ -28,11 +32,18 @@ export async function perform(action, values, ctx, { toast = true } = {}) {
 export function openDialog(action, ctx) {
   const spec = dialogFor(action, ctx);
   if (!spec) return false;
-  openOverlay({ mod: "better-git-graph", kind: "dialog", width: 420, height: dialogHeight(spec), props: { role: "dialog", action, ctx } });
+  const props = { action, ctx };
+  openOverlay(ctx.betterChanges
+    ? graphOverlay("dialog", props, { width: 420, height: dialogHeight(spec) })
+    : { mod: "better-git-graph", kind: "dialog", width: 420, height: dialogHeight(spec), props: { role: "dialog", ...props } });
   return true;
 }
 
-export function showChanges() {
+export function showChanges(ctx) {
+  if (ctx?.betterChanges) {
+    setShared("better-changes.git-graph-command", { command: "changes", root: ctx.root, on: ctx.on ?? null, at: Date.now() });
+    return;
+  }
   run("layout.select", { stack: "panel-body", child: "changes" });
   run("layout.show", { id: "panel" });
 }

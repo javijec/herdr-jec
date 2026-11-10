@@ -15,6 +15,9 @@ import { gitMethods } from "./git/repository.js";
 import { sidebarMethods } from "./views/sidebar.js";
 import { diffMethods } from "./views/diff.js";
 import { paneHeaderMethods } from "./views/pane-header.js";
+import { graphOverlayMode } from "./git-graph/host.js";
+import { Menu as GitGraphMenu } from "./git-graph/menu.js";
+import { Dialog as GitGraphDialog } from "./git-graph/dialog.js";
 
 const CONTEXT_POLL_MS = 300;
 const STATUS_POLL_MS = 10000;
@@ -33,6 +36,13 @@ class BetterChanges extends View {
     if (p.pane) {
       this.mode = "pane-header";
       this.hovered = false;
+      return;
+    }
+    if (p.overlay && graphOverlayMode(p.role)) {
+      const role = graphOverlayMode(p.role);
+      this.mode = role === "menu" ? "git-graph-menu" : "git-graph-dialog";
+      this.graphOverlay = role === "menu" ? new GitGraphMenu() : new GitGraphDialog();
+      this.graphOverlay.init(cx);
       return;
     }
     if (p.overlay) {
@@ -59,6 +69,7 @@ class BetterChanges extends View {
     if (this.mode === "sidebar") setShared("better-changes.diff-layout", this.diffLayout);
     this.menuOpen = false;
     this.menuFocus = cx.focus_handle();
+    this.gitGraphFocus = cx.focus_handle();
     this.closed = new Set();
     this.collapsed = new Set(JSON.parse(localStorage.getItem("collapsed") ?? "[]"));
     this.files = [];
@@ -171,6 +182,13 @@ class BetterChanges extends View {
       this.syncSelection(cx);
       if (this.root && this.path && this.shownFull !== this.fullFile()) this.loadDiff(cx);
       this.publishHead();
+    }
+    const graphCommand = shared("better-changes.git-graph-command");
+    if (graphCommand?.at && graphCommand.at !== this.gitGraphCommandAt) {
+      this.gitGraphCommandAt = graphCommand.at;
+      if (this.mode === "sidebar" && graphCommand.command === "changes" && graphCommand.root === this.root && graphCommand.on === (this.on ?? null)) {
+        this.setTab("changes", cx);
+      }
     }
     const reload = shared("better-changes.reload");
     if (

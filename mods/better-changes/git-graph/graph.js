@@ -9,6 +9,7 @@ import { READ, STATUS, UNCOMMITTED, LABEL, logArgs, parseLog, parseStatus, withU
   menuFor, menuHeight, fileArgs, joinFiles, diffArgs, diffRows } from "./git.js";
 import { perform, openDialog, showChanges } from "./act.js";
 import { icon } from "./menu.js";
+import { graphFocusHandle, graphLocation, graphOverlay } from "./host.js";
 
 function location(folder) {
   if (folder) return { cwd: folder, on: null };
@@ -81,7 +82,9 @@ async function readFolder(cwd, on, { all, remotes, limit }) {
 }
 
 export class Graph {
-  init(cx) {
+  init(cx, { getLocation = null, embedded = false, focusHandle = null } = {}) {
+    this.getLocation = getLocation;
+    this.embedded = embedded;
     this.folder = props()?.folder ?? null;
     // A scrollbar finds its list by name: each copy (panel, pane) needs its own.
     this.listId = `graph-rows-${Math.random().toString(36).slice(2)}`;
@@ -89,15 +92,17 @@ export class Graph {
     this.all = true; this.remotes = true; this.wide = false; this.graphMax = 160; this.scale = null;
     this.watchToken = 0; this.seenChange = shared("git-graph.changed");
     this.seen = new Map(); this.commitDetails = new Map();
-    this.handle = cx.focus_handle();
+    this.handle = graphFocusHandle(cx, focusHandle);
     this.reset();
     this.refresh(cx);
-    cx.timer.after(1500, (cx) => this.warm(cx));
+    if (!this.embedded) cx.timer.after(1500, (cx) => this.warm(cx));
     // Remote spaces can't be watched: poll them gently. New folders get read ahead.
-    cx.timer.every(15000, (cx) => { if (!this.watching) this.refresh(cx); this.warm(cx); });
+    cx.timer.every(15000, (cx) => { if (!this.watching) this.refresh(cx); if (!this.embedded) this.warm(cx); });
   }
 
-  key() { return JSON.stringify(location(this.folder)); }
+  sourceLocation() { return this.getLocation ? graphLocation(this.getLocation) : location(this.folder); }
+
+  key() { return JSON.stringify(this.sourceLocation()); }
 
   reset() {
     Object.assign(this, folderState());
@@ -148,7 +153,7 @@ export class Graph {
   // A load belongs to its folder: a new folder starts at once, and a slower
   // load for the old one finds itself stale and drops its result.
   refresh(cx, full = true) {
-    const { cwd, on } = location(this.folder), context = this.key();
+    const { cwd, on } = this.sourceLocation(), context = this.key();
     if (context !== this.context) { this.enter(context); full = true; }
     if (!cwd) { this.state = "nofolder"; return; }
     if (this.loading === context) { this.again = this.again === "full" || full ? "full" : "status"; return; }
@@ -191,7 +196,7 @@ export class Graph {
     this.commits = commits; this.rows = rows; this.lanes = width;
     this.labels = new Map(commits.map((c) => [c.hash, labelsOf(c, this.remotes)]));
     this.index = new Map(commits.map((c, i) => [c.hash, i]));
-    this.ctx = { root: this.root, on: this.on, current: this.current, head: this.head, branches: this.branches, remotes: this.remoteNames };
+    this.ctx = { root: this.root, on: this.on, current: this.current, head: this.head, branches: this.branches, remotes: this.remoteNames, betterChanges: this.embedded };
     this.state = commits.length ? "ready" : "empty"; this.error = null;
     if (this.selected && !this.index.has(this.selected)) { this.selected = null; this.details = null; this.diff = null; }
   }
@@ -287,7 +292,10 @@ export class Graph {
       : hit && hit.part.kind !== "head" ? { kind: hit.part.kind, name: hit.part.name, commit: brief(commit) }
       : { kind: "commit", commit: brief(commit) };
     const items = menuFor(target, this.ctx);
-    openOverlay({ mod: "better-git-graph", kind: "popup", at: "pointer", width: 268, height: menuHeight(items), props: { role: "menu", target, ctx: this.ctx } });
+    const menuProps = { target, ctx: this.ctx };
+    openOverlay(this.embedded
+      ? graphOverlay("menu", menuProps, { at: "pointer", width: 268, height: menuHeight(items) })
+      : { mod: "better-git-graph", kind: "popup", at: "pointer", width: 268, height: menuHeight(items), props: { role: "menu", ...menuProps } });
   }
 
   pick(commit, cx) {
@@ -491,7 +499,7 @@ export class Graph {
     const pane = (content) => v_flex().flex_none().h(320).border_t(1).border_color(t.border)
       .child(top.child(div().flex_1().text_color(t.muted).child(title))
         .when(Boolean(commit.uncommitted), (e) => e.child(div().id("graph-open-changes").px(6).py(1).rounded(4).text_color(t.accent).cursor_pointer().hover((s) => s.bg(t.hover))
-          .on_click(() => showChanges()).child("Open Changes")))
+          .on_click(() => showChanges(this.ctx)).child("Open Changes")))
         .child(close))
       .child(content);
     if (d?.error) return pane(body.child(div().text_color(t.ansi1).child(d.error)));

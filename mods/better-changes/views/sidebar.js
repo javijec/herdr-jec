@@ -3,6 +3,8 @@ import { div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { theme, shared, setShared } from "herdr";
 import { fileTree, timeAgo } from "../git/model.js";
+import { Graph as GitGraph } from "../git-graph/graph.js";
+import { graphViewForTab } from "../git-graph/host.js";
 import {
   TEXT,
   SPIN_MS,
@@ -43,8 +45,19 @@ export const sidebarMethods = {
   setTab(tab, cx) {
     this.tab = tab;
     localStorage.setItem("tab", tab);
-    if (tab === "commit") this.loadCommits(cx);
+    if (graphViewForTab(tab) === "git-graph") this.ensureGitGraph(cx);
     cx.notify();
+  },
+
+  ensureGitGraph(cx) {
+    if (this.gitGraph) return;
+    this.gitGraph = new GitGraph();
+    this.gitGraph.init(cx, { getLocation: () => this.location(), embedded: true, focusHandle: this.gitGraphFocus });
+  },
+
+  renderGitGraph(cx) {
+    this.ensureGitGraph(cx);
+    return this.gitGraph.render(cx);
   },
 
   setView(view, cx) {
@@ -68,18 +81,15 @@ export const sidebarMethods = {
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
 
-  render() {
+  render(cx) {
+    if (this.mode === "git-graph-menu" || this.mode === "git-graph-dialog") return this.graphOverlay.render(cx);
     if (this.mode === "panel-key") return div();
     if (this.mode === "pane-header") return this.renderPaneHeader();
     if (this.mode === "diff") return this.renderDiff();
     return Panel({ id: "better-changes" })
       .child(this.renderHeader())
       .child(
-        this.tab === "commit"
-          ? this.selectedCommit
-            ? this.renderCommit()
-            : this.renderHistory()
-          : this.renderChanges(),
+        graphViewForTab(this.tab) === "git-graph" ? this.renderGitGraph(cx) : this.renderChanges(),
       );
   },
 
@@ -127,7 +137,7 @@ export const sidebarMethods = {
 
   refreshAll(cx) {
     this.refresh(cx);
-    if (this.tab === "commit") this.loadCommits(cx);
+    if (graphViewForTab(this.tab) === "git-graph") this.gitGraph?.refresh(cx);
     if (this.refreshSpinning) return;
     this.refreshSpinning = true;
     cx.notify();
@@ -136,7 +146,7 @@ export const sidebarMethods = {
 
   // Git usually answers at once, so the icon always makes a full turn to be seen.
   stopSpinningWhenRead(cx) {
-    if (this.loading || this.commitsLoading) {
+    if (this.loading || this.commitsLoading || this.gitGraph?.loading) {
       cx.timer.after(SPIN_MS, (cx) => this.stopSpinningWhenRead(cx));
       return;
     }

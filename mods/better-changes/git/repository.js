@@ -160,7 +160,6 @@ export const gitMethods = {
     this.committed = committed;
     this.branch = branch;
     this.repo = repo;
-    if (this.tab === "commit") this.loadCommits(cx);
   },
 
   // Remote repositories rely on the poll: watchFolder is local only.

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/gentle-herdr-sidebar-model.test.mjs test/bridge.test.mjs test/changes.test.mjs test/machine-vitals-metrics.test.mjs test/better-changes-patch.test.cjs"
+    "test": "node --test test/gentle-herdr-sidebar-model.test.mjs test/bridge.test.mjs test/changes.test.mjs test/machine-vitals-metrics.test.mjs test/better-changes-patch.test.cjs test/better-changes-git-graph.test.mjs"
   },
   "pi": {
     "extensions": ["./extensions/gentle-herdr-bridge.mjs"]
