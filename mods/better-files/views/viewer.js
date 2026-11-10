@@ -9,14 +9,18 @@ import {
   fileLinesOf,
   hunkKey,
   isImage,
+  isMarkdown,
   languageOf,
+  markdownBlocks,
+  parentOf,
   parseHunks,
+  resolvePath,
   tokenize,
   viewable,
 } from "../files/model.js";
 import { viewerEntries } from "../actions/open.js";
 import { foundEditors } from "../actions/outside.js";
-import { TEXT, Icon, Message, MenuButton, TextButton, codeFont, codeSize } from "./ui.js";
+import { TEXT, Icon, Message, MenuButton, TextButton, Markdown, codeFont, codeSize } from "./ui.js";
 
 const CHAR_WIDTH = 0.62; // Of the code font's size, to size the sideways scroll.
 const LINE_COLUMNS = 6; // The number column and a margin, in the same units.
@@ -47,6 +51,7 @@ export const viewerMethods = {
       space: entry?.space ?? this.viewerSpace,
       file: entry?.file ?? this.viewerFile,
       preview: entry?.preview ?? false,
+      markdown: entry?.markdown ?? this.markdownDefault ?? "preview",
     });
   },
 
@@ -123,8 +128,72 @@ export const viewerMethods = {
           else this.code = this.newCode(file, shown.text);
         }
       }
+      if (!shown.problem && isMarkdown(file.path) && shown.text !== this.previousMarkdownText) {
+        this.previousMarkdownText = shown.text;
+        this.readMarkdownImages(cx);
+      }
       cx.notify();
     });
+  },
+
+  markdownView() {
+    return this.viewerEntry()?.markdown ?? this.markdownDefault ?? "preview";
+  },
+
+  showsMarkdownPreview() {
+    return Boolean(this.file && isMarkdown(this.file.path) && this.markdownView() === "preview");
+  },
+
+  readMarkdownImages(cx) {
+    const file = this.file;
+    if (!file || file.on || !isMarkdown(file.path)) return;
+    const blocks = markdownBlocks(this.text ?? "", parentOf(file.path));
+    const paths = [...new Set(blocks.filter((block) => block.type === "image").map((block) => block.path))];
+    const old = this.markdownCopies ?? [];
+    const next = paths.map((path, index) => `mods/better-files/cache/${this.viewerId}-md-${index}.${path.split(".").pop().toLowerCase()}`);
+    this.markdownCopies = next;
+    this.markdownImagePaths = paths;
+    for (const stale of old.slice(paths.length)) {
+      const path = `${appHome()}/${stale}`;
+      if (/^[A-Za-z]:[\\/]/.test(appHome())) {
+        const quoted = "'" + path.replaceAll("'", "''") + "'";
+        exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Remove-Item -LiteralPath ${quoted} -Force -ErrorAction SilentlyContinue`], {}).catch(() => {});
+      } else exec("rm", ["-f", "--", path], {}).catch(() => {});
+    }
+    if (!paths.length) return;
+    const windows = /^[A-Za-z]:[\\/]/.test(appHome());
+    cx.spawn(async (cx) => {
+      for (let index = 0; index < paths.length; index++) {
+        const source = paths[index];
+        const dest = `${appHome()}/${next[index]}`;
+        const previous = old[index] ? `${appHome()}/${old[index]}` : "";
+        let result;
+        if (windows) {
+          const quote = (value) => "'" + String(value).replaceAll("'", "''") + "'";
+          const script = `$ErrorActionPreference='Stop'; ${previous ? `Remove-Item -LiteralPath ${quote(previous)} -Force -ErrorAction SilentlyContinue;` : ""} New-Item -ItemType Directory -Force -Path (Split-Path -Parent ${quote(dest)}) | Out-Null; Copy-Item -LiteralPath ${quote(source)} -Destination ${quote(dest)} -Force`;
+          result = await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {}).catch(() => null);
+        } else result = await exec("sh", ["-c", COPY_IMAGE, "copy-image", source, dest, previous], {}).catch(() => null);
+        if (this.file?.path !== file.path) return;
+        if (result?.code !== 0) this.markdownCopies[index] = null;
+      }
+      cx.notify();
+    });
+  },
+
+  markdownPreview() {
+    const blocks = markdownBlocks(this.text ?? "", parentOf(this.file.path));
+    const imagePaths = this.markdownImagePaths ?? [];
+    return v_flex().id("viewer-markdown").flex_1().min_h(0).overflow_y_auto().gap(8).p(12).children(
+      blocks.map((block, index) => block.type === "image"
+        ? (this.file.on ? Message("Images on another machine can't be shown here.") : this.markdownCopies?.[imagePaths.indexOf(block.path)]
+          ? image(this.markdownCopies[imagePaths.indexOf(block.path)]).max_w_full().max_h(480)
+          : Message("Loading image…"))
+        : Markdown(`viewer-markdown-${index}`, block.text).on_link_click((url, cx) => {
+          if (/^https?:\/\//i.test(url)) return cx.open_url(url);
+          const path = resolvePath(parentOf(this.file.path), url);
+          if (path) this.openFile({ path, root: this.file.root, on: this.file.on }, cx);
+        })),
+    );
   },
 
   newCode(file, value) {
@@ -358,6 +427,7 @@ export const viewerMethods = {
   viewerActions() {
     const file = this.file;
     const preview = this.viewerEntry()?.preview;
+    const markdown = Boolean(file && isMarkdown(file.path));
     const editors = file?.on ? [] : foundEditors();
     // Only changes that replaced something have old lines to show.
     const openable = this.gutterOn ? (this.hunks ?? []).filter((hunk) => hunk.old.length).map(hunkKey) : [];
@@ -379,6 +449,9 @@ export const viewerMethods = {
           }),
         ),
       )
+      .when(markdown, (el) => el
+        .child(TextButton({ id: "viewer-view-preview", label: "Preview", active: this.markdownView() === "preview", onClick: (cx) => { this.setViewer(this.viewerId, { markdown: "preview" }); cx.notify(); } }))
+        .child(TextButton({ id: "viewer-view-code", label: "Code", active: this.markdownView() === "code", onClick: (cx) => { this.setViewer(this.viewerId, { markdown: "code" }); cx.notify(); } })))
       .when(Boolean(preview), (el) =>
         el.child(
           TextButton({
@@ -441,6 +514,7 @@ export const viewerMethods = {
     if (this.file && isImage(this.file.path)) root.child(this.imageView());
     else if (this.problem) root.child(Message(this.problem));
     else if (this.text === undefined) root.child(Message(head ? "Loading…" : "This tab has no file."));
+    else if (this.showsMarkdownPreview()) root.child(this.markdownPreview());
     else if (this.gutterOn) root.child(this.linesView());
     else root.child(v_flex().flex_1().min_h(0).child(Editor.new(this.code).flex_1().min_h(0)));
     // There's no row of its own to sit in, so the actions float over the file's corner.

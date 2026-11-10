@@ -2,7 +2,7 @@
 // tokens and small components, with only what this mod uses. UI only: values in,
 // callbacks out. Components return ordinary elements, so callers can chain.
 import { div, svg } from "gpui-kit";
-import { h_flex, v_flex, Popover, Textarea } from "gpui-base";
+import { h_flex, v_flex, Popover, Textarea, TextView } from "gpui-base";
 import { theme, settings } from "herdr";
 
 // Plain px: Herdr scales a mod's sizes by zoom itself.
@@ -13,6 +13,9 @@ export const SPIN_MS = 900;
 export const codeFont = () => settings().font_family ?? "JetBrains Mono";
 // The terminals' size, so a file reads like the terminal beside it.
 export const codeSize = () => settings().font_size ?? 14;
+
+export const Markdown = (id, text) => TextView.markdown(id, text)
+  .text_size(TEXT.body).w_full().min_w(0).scrollable(false).selectable(true);
 
 export const Icon = (name, size = 14) =>
   svg(`mods/better-files/icons/${name}.svg`).size(size).text_color(theme().muted).flex_none();

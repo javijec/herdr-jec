@@ -103,6 +103,13 @@
           "description": "Tint changed lines. Off uses Herdr's own editor instead: fuller highlighting, selection and folding, but no line colours.",
           "type": "boolean",
           "default": true
+        },
+        "markdown": {
+          "title": "Markdown view",
+          "description": "How Markdown files open. Choose Preview for rendered Markdown or Code for the source.",
+          "type": "string",
+          "enum": ["preview", "code"],
+          "default": "preview"
         }
       }
     }

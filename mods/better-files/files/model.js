@@ -37,6 +37,61 @@ export const isImage = (path) => {
   return name.includes(".") && IMAGES.has(name.split(".").pop().toLowerCase());
 };
 
+const extensionOf = (path) => {
+  const name = baseName(path);
+  return name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+};
+
+export const isMarkdown = (path) => ["md", "markdown"].includes(extensionOf(path));
+
+export function resolvePath(folder, link) {
+  let value = String(link ?? "").replace(/^file:\/\//i, "");
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return null;
+  value = value.replace(/[?#].*$/, "");
+  try { value = decodeURIComponent(value); } catch {}
+  if (!value) return null;
+  const parts = value.startsWith("/") ? [""] : String(folder).split("/");
+  for (const part of value.split("/")) {
+    if (part === "..") {
+      if (parts.length > 1) parts.pop();
+    } else if (part && part !== ".") parts.push(part);
+  }
+  return parts.join("/") || "/";
+}
+
+const IMAGE_LINE = new RegExp(String.raw`^!\[([^\]]*)\]\(\s*(?:<([^>]*)>|([^\)\s]+))(?:\s+"[^"]*")?\s*\)\s*$`);
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+export function markdownBlocks(text, folder) {
+  const blocks = [];
+  let pending = "";
+  let fence = null;
+  const flush = () => {
+    if (pending) blocks.push({ type: "text", text: pending });
+    pending = "";
+  };
+  for (const line of String(text).split(/(?<=\n)/)) {
+    const body = line.replace(/\n$/, "");
+    const marker = FENCE.exec(body)?.[1];
+    if (marker && (!fence || marker[0] === fence[0] && marker.length >= fence.length)) fence = fence ? null : marker;
+    if (!fence) {
+      const match = IMAGE_LINE.exec(body);
+      if (match) {
+        const target = match[2] ?? match[3];
+        const path = resolvePath(folder, target);
+        if (path && isImage(path)) {
+          flush();
+          blocks.push({ type: "image", alt: match[1], path });
+          continue;
+        }
+      }
+    }
+    pending += line;
+  }
+  flush();
+  return blocks;
+}
+
 
 export function languageOf(path) {
   const name = baseName(path);
