@@ -1,6 +1,6 @@
 // The spaces list: right-aligned branches, nested worktrees and a PR status line.
 // Repository facts follow each space's first terminal.
-import { div } from "gpui-kit";
+import { div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import {
   spaces,
@@ -29,7 +29,7 @@ const rowHeight = ({ tree }) => (tree ? 28 : 30);
 // occasionally to catch edits and commits made outside Herdr.
 const GIT_FALLBACK_MS = 15000;
 // Preferences a person may change in the installed mod.json under `settings`.
-const DEFAULT_SETTINGS = { git: { retry_after: "15s" }, pull_request_status: true };
+const DEFAULT_SETTINGS = { git: { retry_after: "15s" }, pull_request_status: true, lists_view: "stacked" };
 
 // What a stored color name looks like on an avatar (the same in every mod
 // that draws space avatars): one strong color per hue, light and dark alike.
@@ -99,6 +99,10 @@ export class Spaces {
       for (const problem of problems) console.warn(`my-better-sidebar mod.json settings: ${problem}`);
       cx.notify();
     });
+  }
+
+  collapsed() {
+    return (this.width ?? findNode(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
   }
 
   checkNew(cx) {
@@ -368,19 +372,55 @@ export class Spaces {
       const metrics = this.vitals.renderFor(null, collapsed);
       return this.machineLoading(null) && !rows.length
         ? [head, metrics, this.loadingRow(null, t, collapsed)]
-        : [head, metrics, ...rows.map(draw)];
+        : [head, metrics, ...rows.flatMap((row) => this.spaceAndTabs(row, draw, t, collapsed))];
     }
     return [null, ...remote].flatMap((m) => {
       const head = this.machineHeader(m, t, collapsed);
       if (this.folded.has(m)) return [head];
       const metrics = this.vitals.renderFor(m, collapsed);
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
-      if (mine.length) return [head, metrics, ...mine.map(draw)];
+      if (mine.length) return [head, metrics, ...mine.flatMap((row) => this.spaceAndTabs(row, draw, t, collapsed))];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
         : this.newSpaceRow(m, t, collapsed);
       return [head, metrics, placeholder];
     });
+  }
+
+  spaceAndTabs(row, draw, t, collapsed) {
+    const result = [draw(row)];
+    if (collapsed) return result;
+    const panesByTab = new Map(panes().filter((pane) => pane.tab).map((pane) => [pane.tab, pane]));
+    for (const tab of row.w.tabs ?? []) {
+      const pane = panesByTab.get(tab.id);
+      const program = pane?.program;
+      const modIcon = pane?.mod && shared("mod-icons")?.[pane.mod];
+      const tabIcon = program?.icon
+        ? (program.tint ? svg(program.icon).size(15).flex_none().text_color(t.dim) : image(program.icon).w(15).h(15).flex_none())
+        : modIcon ? svg(modIcon).size(15).flex_none().text_color(t.dim) : null;
+      result.push(
+        h_flex()
+          .id(`space-tab-${row.w.id}-${tab.id}`)
+          .h(25)
+          .flex_none()
+          .pl(row.tree ? 45 : 31)
+          .pr(8)
+          .gap(7)
+          .items_center()
+          .text_size(TEXT.caption)
+          .text_color(tab.active ? t.foreground : t.dim)
+          .cursor_pointer()
+          .hover((el) => el.bg(t.hover).text_color(t.foreground))
+          .on_click(() => run("tab.select", { id: tab.id }))
+          .when(Boolean(tabIcon), (el) => el.child(tabIcon))
+          .when(!tabIcon, (el) => el.child(div().w(15).flex_none()))
+          .child(div().flex_1().min_w(0).truncate().child(tab.name || "Untitled"))
+          .when(Boolean(program?.name && program.name !== tab.name), (el) =>
+            el.child(div().max_w(110).truncate().text_color(t.muted).child(program.name)),
+          ),
+      );
+    }
+    return result;
   }
 
   machineLoading(m) {
@@ -483,23 +523,6 @@ export class Spaces {
 
   // ── Branch and PR descriptions ───────────────────────────────────────────
 
-  // A muted secondary line keeps long branch names separate from the space name.
-  gitTail(g, active, t) {
-    const branch = g.branch === "(detached)" ? "detached" : (g.branch ?? "detached");
-    return h_flex()
-      .flex_1().min_w(0).gap(5).justify_start().items_center()
-      .text_size(TEXT.caption).text_color(t.dim)
-      .child(div().min_w(0).truncate().tooltip(branch).child(branch))
-      .when(active && g.ahead > 0, (el) => el.child(Badge(`\u2191${g.ahead}`)))
-      .when(active && g.behind > 0, (el) => el.child(Badge(`\u2193${g.behind}`)));
-  }
-
-  branchLine(g, w, tree, t) {
-    return h_flex().id(`space-branch-${w.id}`).h(20).pl(tree ? 44 : 27).gap(5).items_center()
-      .child(Icon("branch", 11).text_color(t.dim))
-      .child(this.gitTail(g, w.active, t));
-  }
-
   // The branch and PR must describe the same checkout: the space's first
   // terminal, matching Herdr's space naming and worktree grouping semantics.
   checkoutStatus(w) {
@@ -591,12 +614,11 @@ export class Spaces {
 
   row({ w, i, g, tree }, t) {
     const status = this.checkoutStatus(w);
-    const hasBranch = Boolean(g?.branch);
     const row = v_flex()
       .relative()
       .id(`space-${w.id}`)
       .px(8)
-      .h(rowHeight({ tree }) + (hasBranch ? 20 : 0))
+      .h(rowHeight({ tree }))
       .flex_none()
       .justify_center()
       .when(w.active, (el) => el
@@ -605,8 +627,7 @@ export class Spaces {
       .when(!w.active, (el) => el.hover((s) => s.bg(t.hover)))
       .when(this.pressed === i && this.over !== i, (el) => el.opacity(0.5))
       .on_mouse_down("right", () => this.menu(w))
-      .child(this.rowTitle(w, g, tree, t, status))
-      .when(hasBranch, (el) => el.child(this.branchLine(g, w, Boolean(tree), t)));
+      .child(this.rowTitle(w, g, tree, t, status));
     if (this.pressed !== null && this.over === i && this.pressed !== i)
       row.child(this.dropLine(i, t));
     return this.withDragging(row, w, i);
@@ -652,11 +673,15 @@ export class Spaces {
   }
 
   rowTitle(w, g, tree, t, status) {
+    const branch = g?.branch && !["main", "master", w.name].includes(g.branch) ? g.branch : null;
     return h_flex()
       .gap(9).items_center()
       .when(Boolean(tree), (el) => el.pl(22).child(Icon("branch", 13).text_color(t.dim)))
       .when(!tree, (el) => el.child(this.avatar(w, t)))
-      .child(div().flex_1().min_w(0).truncate().tooltip(w.name).text_color(t.foreground).child(w.name))
+      .child(div().min_w(0).flex_1().truncate().tooltip(w.name).text_color(t.foreground).child(w.name))
+      .when(Boolean(branch), (el) => el.child(div().max_w(100).flex_none().truncate().text_size(TEXT.caption).text_color(t.dim).tooltip(branch).child(branch)))
+      .when(Boolean(w.active && g?.ahead > 0), (el) => el.child(Badge(`↑${g.ahead}`)))
+      .when(Boolean(w.active && g?.behind > 0), (el) => el.child(Badge(`↓${g.behind}`)))
       .when(Boolean(status?.prs.length), (el) => el.child(this.prBadge(w, t)))
       .when(Boolean(status?.error), (el) => el.child(div().text_size(TEXT.caption).text_color(t.dim)
         .tooltip(`PR refresh failed: ${status.error}`).child("!")));
@@ -718,7 +743,7 @@ export class Spaces {
 
   render() {
     const t = theme();
-    const collapsed = (this.width ?? findNode(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
+    const collapsed = this.collapsed();
     return v_flex()
       .id("better-sidebar-root")
       .size_full()

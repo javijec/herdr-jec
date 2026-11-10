@@ -83,6 +83,13 @@
           "description": "Colour spaces by their pull request's state, through the GitHub CLI. Turn off if you don't have gh.",
           "type": "boolean",
           "default": true
+        },
+        "lists_view": {
+          "title": "Spaces and agents layout",
+          "description": "Show Spaces and Agents as separate stacked lists or switch between them with tabs.",
+          "type": "string",
+          "enum": ["stacked", "tabs"],
+          "default": "stacked"
         }
       }
     }
