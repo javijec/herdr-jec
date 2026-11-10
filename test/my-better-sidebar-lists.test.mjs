@@ -17,3 +17,8 @@ test("the layout mounts one switchable lists block and the setting exposes both 
   assert.equal(lists.content.props.view, "lists");
   assert.deepEqual(schema.properties.settings.properties.lists_view.enum, ["stacked", "tabs"]);
 });
+
+test("sidebar views without an init hook can still be mounted", async () => {
+  const source = await readFile(new URL("../mods/my-better-sidebar/main.js", import.meta.url), "utf8");
+  assert.match(source, /this\.part\.init\?\.\(given, cx\)/);
+});
