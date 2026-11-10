@@ -1,12 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { isTabbedView } from "../mods/my-better-sidebar/views/lists-model.js";
+import { isTabbedView, listsViewOf } from "../mods/my-better-sidebar/views/lists-model.js";
 
 test("lists view stays stacked by default and switches only for the tabs setting", () => {
   assert.equal(isTabbedView({}), false);
   assert.equal(isTabbedView({ lists_view: "stacked" }), false);
   assert.equal(isTabbedView({ lists_view: "tabs" }), true);
+});
+
+test("a visible layout choice overrides the configured default and invalid choices fall back", () => {
+  assert.equal(listsViewOf("tabs", { lists_view: "stacked" }), "tabs");
+  assert.equal(listsViewOf("stacked", { lists_view: "tabs" }), "stacked");
+  assert.equal(listsViewOf("invalid", { lists_view: "tabs" }), "tabs");
+  assert.equal(listsViewOf(undefined, {}), "stacked");
 });
 
 test("the layout mounts one switchable lists block and the setting exposes both choices", async () => {
