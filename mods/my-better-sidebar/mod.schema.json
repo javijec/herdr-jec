@@ -89,7 +89,7 @@
           "description": "Show Spaces and Agents as separate stacked lists or switch between them with tabs.",
           "type": "string",
           "enum": ["stacked", "tabs"],
-          "default": "stacked"
+          "default": "tabs"
         }
       }
     }

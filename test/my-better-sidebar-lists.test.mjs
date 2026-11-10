@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { isTabbedView, listsViewOf } from "../mods/my-better-sidebar/views/lists-model.js";
 
-test("lists view stays stacked by default and switches only for the tabs setting", () => {
-  assert.equal(isTabbedView({}), false);
+test("lists view uses upstream tabs by default and switches for the stacked setting", () => {
+  assert.equal(isTabbedView({}), true);
   assert.equal(isTabbedView({ lists_view: "stacked" }), false);
   assert.equal(isTabbedView({ lists_view: "tabs" }), true);
 });
@@ -13,7 +13,15 @@ test("a visible layout choice overrides the configured default and invalid choic
   assert.equal(listsViewOf("tabs", { lists_view: "stacked" }), "tabs");
   assert.equal(listsViewOf("stacked", { lists_view: "tabs" }), "stacked");
   assert.equal(listsViewOf("invalid", { lists_view: "tabs" }), "tabs");
-  assert.equal(listsViewOf(undefined, {}), "stacked");
+  assert.equal(listsViewOf(undefined, {}), "tabs");
+});
+
+test("the stacked layout selector shares the Machines header row", async () => {
+  const lists = await readFile(new URL("../mods/my-better-sidebar/views/lists.js", import.meta.url), "utf8");
+  const spaces = await readFile(new URL("../mods/my-better-sidebar/views/spaces.js", import.meta.url), "utf8");
+  assert.match(lists, /this\.spaces\.body\(t, collapsed\)/);
+  assert.match(spaces, /this\.layoutMenu\(view\)/);
+  assert.doesNotMatch(lists, /lists-layout-toolbar/);
 });
 
 test("the layout mounts one switchable lists block and the setting exposes both choices", async () => {
