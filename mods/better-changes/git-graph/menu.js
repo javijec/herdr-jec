@@ -7,7 +7,7 @@ import { menuFor } from "./git.js";
 import { perform, openDialog, showChanges } from "./act.js";
 
 // A glyph of this mod, or another mod's icon by its path (Herdr's own Changes icon).
-export const icon = (name) => (name.includes("/") ? name : `mods/better-git-graph/icons/${name}.svg`);
+export const icon = (name) => (name.includes("/") ? name : `mods/better-changes/git-graph/icons/${name}.svg`);
 
 export class Menu {
   init(cx) {
@@ -28,7 +28,7 @@ export class Menu {
       notify({ title: "Copied", body: a.text, level: "success", timeout: 2000 });
     } else if (a.type === "showChanges") {
       closeOverlay(overlay);
-      showChanges();
+      showChanges(ctx);
     } else if (openDialog(a, ctx)) {
       closeOverlay(overlay);
     } else {
