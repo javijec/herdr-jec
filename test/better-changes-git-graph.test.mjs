@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { graphFocusHandle, graphLocation, graphOverlay, graphOverlayMode, graphViewForTab } from "../mods/better-changes/git-graph/host.js";
+import { resizedDetailsHeight } from "../mods/better-changes/git-graph/details.js";
 
 test("the existing Commits tab routes to the embedded graph, not the old list", () => {
   assert.equal(graphViewForTab("commit"), "git-graph");
@@ -45,4 +46,11 @@ test("embedded graph reuses the focus handle created by its owning View", () => 
 
   assert.equal(graphFocusHandle(cx, focusHandle), focusHandle);
   assert.equal(allocated, false);
+});
+
+test("commit details resize upward and downward within the available graph height", () => {
+  assert.equal(resizedDetailsHeight(320, -100, 800), 420);
+  assert.equal(resizedDetailsHeight(320, 100, 800), 220);
+  assert.equal(resizedDetailsHeight(320, -1000, 800), 700);
+  assert.equal(resizedDetailsHeight(320, 1000, 800), 120);
 });

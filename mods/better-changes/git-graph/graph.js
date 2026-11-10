@@ -10,6 +10,7 @@ import { READ, STATUS, UNCOMMITTED, LABEL, logArgs, parseLog, parseStatus, withU
 import { perform, openDialog, showChanges } from "./act.js";
 import { icon } from "./menu.js";
 import { graphFocusHandle, graphLocation, graphOverlay } from "./host.js";
+import { resizedDetailsHeight } from "./details.js";
 
 function location(folder) {
   if (folder) return { cwd: folder, on: null };
@@ -85,6 +86,8 @@ export class Graph {
   init(cx, { getLocation = null, embedded = false, focusHandle = null } = {}) {
     this.getLocation = getLocation;
     this.embedded = embedded;
+    this.detailsHeight = 320;
+    this.detailsDrag = null;
     this.folder = props()?.folder ?? null;
     // A scrollbar finds its list by name: each copy (panel, pane) needs its own.
     this.listId = `graph-rows-${Math.random().toString(36).slice(2)}`;
@@ -483,11 +486,10 @@ export class Graph {
       .on_click((_e, cx) => { this.selected = null; this.details = null; this.diff = null; cx.notify(); }).child("×");
     if (this.diff) {
       const rows = this.diff.rows;
-      return v_flex().flex_none().h(320).border_t(1).border_color(t.border)
-        .child(top.child(div().id("graph-diff-back").px(6).py(1).rounded(4).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
+      return this.detailsFrame(t, top.child(div().id("graph-diff-back").px(6).py(1).rounded(4).text_color(t.muted).cursor_pointer().hover((s) => s.bg(t.hover).text_color(t.foreground))
             .on_click((_e, cx) => { this.diff = null; cx.notify(); }).child("← Files"))
-          .child(div().flex_1().min_w(0).truncate().font_family(mono).text_color(t.foreground).child(this.diff.path)).child(close))
-        .child(div().flex_1().min_h(0).relative().font_family(mono).text_size(11)
+          .child(div().flex_1().min_w(0).truncate().font_family(mono).text_color(t.foreground).child(this.diff.path)).child(close),
+        div().flex_1().min_h(0).relative().font_family(mono).text_size(11)
           .when(!rows, (e) => e.child(div().p(12).text_color(t.dim).child("Loading diff…")))
           .when(Boolean(rows), (e) => e.child(div().id(`${this.diffId}-x`).size_full().overflow_x_scrollbar()
               .child(div().w_full().min_w(this.diff.width).h_full().child(v_virtual_list(this.diffId, rows.length, DIFF_ROW, (i) => String(i),
@@ -496,12 +498,10 @@ export class Graph {
     }
     const title = commit.uncommitted ? "Uncommitted changes" : `Commit ${commit.hash.slice(0, 8)}`;
     const body = v_flex().id("graph-details").flex_1().min_h(0).overflow_y_scrollbar().px(14).py(10).gap(4);
-    const pane = (content) => v_flex().flex_none().h(320).border_t(1).border_color(t.border)
-      .child(top.child(div().flex_1().text_color(t.muted).child(title))
+    const pane = (content) => this.detailsFrame(t, top.child(div().flex_1().text_color(t.muted).child(title))
         .when(Boolean(commit.uncommitted), (e) => e.child(div().id("graph-open-changes").px(6).py(1).rounded(4).text_color(t.accent).cursor_pointer().hover((s) => s.bg(t.hover))
           .on_click(() => showChanges(this.ctx)).child("Open Changes")))
-        .child(close))
-      .child(content);
+        .child(close), content);
     if (d?.error) return pane(body.child(div().text_color(t.ansi1).child(d.error)));
     const meta = (k, v, color) => h_flex().gap(8).text_size(11.5).child(div().w(64).flex_none().text_color(t.dim).child(k)).child(div().min_w(0).truncate().text_color(color ?? t.muted).child(v));
     // The history already has the header: it shows at once, and what git adds lands below it.
@@ -531,6 +531,19 @@ export class Graph {
           .when(f.del > 0, (e) => e.child(div().text_size(11).text_color(t.ansi1).child(`−${f.del}`)));
       }))
       .when(d.more > 0, (e) => e.child(div().text_size(11).text_color(t.dim).child(`and ${d.more} more`))));
+  }
+
+  detailsFrame(t, header, content) {
+    return v_flex().flex_none().h(this.detailsHeight ?? 320).border_t(1).border_color(t.border)
+      .child(div().id("graph-details-resize").h(7).flex_none().cursor_row_resize()
+        .hover((s) => s.bg(t.hover))
+        .on_mouse_down("left", (event, cx) => {
+          this.detailsDrag = { y: event.position.y, height: this.detailsHeight ?? 320 };
+          cx.stop_propagation();
+        })
+        .child(div().h(1).bg(t.border)))
+      .child(header)
+      .child(content);
   }
 
   diffRow({ kind, number, text }, t) {
@@ -569,7 +582,22 @@ export class Graph {
       .on_size_change((size, cx) => {
         const width = size.width / this.unit(), wide = width >= 600, graphMax = Math.max(60, Math.round(width * 0.4));
         this.width = width;
+        this.height = size.height;
         if (wide !== this.wide || graphMax !== this.graphMax) { this.wide = wide; this.graphMax = graphMax; cx.notify(); }
+      })
+      .on_mouse_move((event, cx) => {
+        if (!this.detailsDrag) return;
+        this.detailsHeight = resizedDetailsHeight(
+          this.detailsDrag.height,
+          event.position.y - this.detailsDrag.y,
+          this.height ?? 800,
+        );
+        cx.notify();
+      })
+      .on_mouse_up("left", (_event, cx) => {
+        if (!this.detailsDrag) return;
+        this.detailsDrag = null;
+        cx.stop_propagation();
       })
       .child(this.header(t))
       .when(ready, (e) => e.child(this.toolbar(t)).child(this.columns(t, this.graphWidth())).child(this.list(t, mono))
