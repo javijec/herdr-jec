@@ -2,6 +2,17 @@
 
 This folder is a portable package for the Javijec layout. To install it on another PC, copy these contents into that PC's Herdr app home, preserving the folder structure:
 
+On Windows, `install-layout.ps1` automates the layout, mod, and theme copies. It defaults to `%USERPROFILE%\.config\herdr-app` (or `$env:HERDR_APP_HOME` when set):
+
+```powershell
+.\install-layout.ps1 -WhatIf
+.\install-layout.ps1
+```
+
+Different existing files are skipped by default. Use `-ReplaceExisting` only when you want the script to back them up under `.herdr-layout-backups` and replace them. Add `-Activate` to switch Herdr to `javijec` after a conflict-free install. The script does not install or enable the Gentle Herdr bridge extension; configure that separately if needed. Use `-HerdrAppHome <path>` to select another app home.
+
+The equivalent manual copy destinations are:
+
 - `layouts/javijec.json` → `<HERDR_APP_HOME>/layouts/javijec.json`
 - `mods/*` → `<HERDR_APP_HOME>/mods/`
 - `themes/*` → `<HERDR_APP_HOME>/themes/`
