@@ -16,6 +16,13 @@ test("empty Agents & Jobs section shows a muted empty state", () => {
   assert.match(source, /text_color\(t\.dim\)\.child\("No active agents or jobs"\)/);
 });
 
+test("fill-available sections give their child container a constrained flex height", () => {
+  const start = source.indexOf("function section(");
+  const end = source.indexOf("function stateLabel(", start);
+  const section = source.slice(start, end);
+  assert.match(section, /if \(fillAvailable\) container\.flex_1\(\)\.min_h\(0\)/);
+});
+
 test("Status omits the Folder, Branch, State, Model / Effort, and Context rows", () => {
   const start = source.indexOf("function statusRows(");
   const end = source.indexOf("function agentItems(", start);

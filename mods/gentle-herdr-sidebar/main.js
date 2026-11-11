@@ -212,9 +212,14 @@ function section(title, summary, t, { expanded = true, onToggle, onTitleClick, c
   if (fillAvailable) output.flex_1().min_h(0);
   else output.flex_none();
   if (borderBottom) output.border_b(1).border_color(t.border);
-  if (expanded && expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
+  const details = () => {
+    const container = v_flex().gap(2);
+    if (fillAvailable) container.flex_1().min_h(0);
+    return container.children(resolveSectionChildren(expanded, children));
+  };
+  if (expanded && expandUp) output.child(details());
   output.child(heading);
-  if (expanded && !expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
+  if (expanded && !expandUp) output.child(details());
   return output;
 }
 
