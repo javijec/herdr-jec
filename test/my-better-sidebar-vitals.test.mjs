@@ -99,3 +99,23 @@ test("remote Windows falls back to PowerShell when uname is unavailable", async 
   assert.deepEqual(remote.map((call) => call.command), ["uname", "powershell.exe"]);
   assert.ok(h.vitals.state["remote:winbox"].data);
 });
+
+test("removing a disconnected machine clears its metrics and platform cache", async () => {
+  const h = harness("windows", async (command, _args, options) => {
+    if (options?.on === "winbox" && command === "uname") return { code: 0, stdout: "Linux\n" };
+    if (options?.on === "winbox" && command === "sh") return { code: 0, stdout: metrics };
+    return { code: 0, stdout: metrics };
+  });
+  await h.flush();
+  h.vitals.setMachines(["winbox"], h.cx);
+  await h.flush();
+  assert.ok(h.vitals.state["remote:winbox"].data);
+  assert.equal(h.vitals.isTarget("winbox"), true);
+
+  h.vitals.setMachines([], h.cx);
+  await h.flush();
+  assert.equal(h.vitals.isTarget("winbox"), false);
+  assert.equal(h.vitals.state["remote:winbox"], undefined);
+  assert.equal(h.vitals.platforms["remote:winbox"], undefined);
+  assert.equal(h.vitals.targets.map((machine) => machine.id).join(","), "local");
+});

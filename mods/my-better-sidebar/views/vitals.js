@@ -70,6 +70,11 @@ export class MachineVitals {
     this.sample(cx, true);
   }
 
+  isTarget(name) {
+    if (name === null) return true;
+    return this.targets.some((machine) => machine.on === name);
+  }
+
   async readMetrics(machine) {
     const options = machine.on ? { on: machine.on } : {};
     let platform = machine.on ? this.platforms[machine.id] : localPlatform();

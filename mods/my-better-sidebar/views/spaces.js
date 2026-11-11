@@ -204,10 +204,13 @@ export class Spaces {
 
   updateVitalsTargets(cx) {
     const visibleSpaces = this.ordered();
+    const connected = new Set(
+      this.machines.filter((machine) => machine.state === "connected").map((machine) => machine.name),
+    );
     const names = [
       ...new Set([
-        ...visibleSpaces.map((space) => space.w.machine).filter(Boolean),
-        ...this.machines.map((machine) => machine.name).filter(Boolean),
+        ...visibleSpaces.map((space) => space.w.machine).filter((name) => name && connected.has(name)),
+        ...connected,
       ]),
     ].sort();
     this.vitals.setMachines(names, cx);
@@ -373,13 +376,13 @@ export class Spaces {
     return [null, ...remote].flatMap((m) => {
       const head = this.machineHeader(m, t, collapsed);
       if (this.folded.has(m)) return [head];
-      const metrics = this.vitals.renderFor(m, collapsed);
+      const metrics = this.vitals.isTarget(m) ? [this.vitals.renderFor(m, collapsed)] : [];
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
-      if (mine.length) return [head, metrics, ...mine.map(draw)];
+      if (mine.length) return [head, ...metrics, ...mine.map(draw)];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
         : this.newSpaceRow(m, t, collapsed);
-      return [head, metrics, placeholder];
+      return [head, ...metrics, placeholder];
     });
   }
 
