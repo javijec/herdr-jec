@@ -13,7 +13,7 @@ export default class BetterSidebar extends View {
   init(given, cx) {
     const Part = PARTS[props()?.view] ?? Spaces;
     this.part = new Part();
-    this.part.init(given, cx);
+    this.part.init?.(given, cx);
   }
 
   render(cx) {

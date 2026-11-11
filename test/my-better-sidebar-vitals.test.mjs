@@ -122,6 +122,45 @@ test("removing a disconnected machine clears its metrics and platform cache", as
   assert.equal(h.vitals.targets.map((machine) => machine.id).join(","), "local");
 });
 
+test("sidebar supports parts without init while initializing parts that provide it", () => {
+  function createSidebar(view, Part) {
+    const sidebarSource = readFileSync(
+      fileURLToPath(new URL("../mods/jec-sidebar/main.js", import.meta.url)),
+      "utf8",
+    )
+      .replace(/^import\s+[\s\S]*?;\n/gm, "")
+      .replace("export default class BetterSidebar", "globalThis.BetterSidebar = class BetterSidebar");
+    const context = vm.createContext({
+      View: class View {},
+      props: () => ({ view }),
+      Spaces: class Spaces {},
+      Agents: class Agents {},
+      Footer: class Footer {},
+      PanelToggle: class PanelToggle {},
+    });
+    context[view === "footer" ? "Footer" : "Agents"] = Part;
+    vm.runInContext(sidebarSource, context);
+    return new context.BetterSidebar();
+  }
+
+  const footer = createSidebar("footer", class Footer {
+    render() { return "footer"; }
+  });
+  footer.init({}, {});
+  assert.equal(footer.render(), "footer");
+
+  const calls = [];
+  const given = {};
+  const cx = {};
+  const agents = createSidebar("agents", class Agents {
+    init(receivedGiven, receivedCx) { calls.push([receivedGiven, receivedCx]); }
+    render() { return "agents"; }
+  });
+  agents.init(given, cx);
+  assert.deepEqual(calls, [[given, cx]]);
+  assert.equal(agents.render(), "agents");
+});
+
 test("space creation is allowed only on the local or connected machine", async () => {
   const spacesSource = readFileSync(
     fileURLToPath(new URL("../mods/jec-sidebar/views/spaces.js", import.meta.url)),
