@@ -9,6 +9,18 @@ const LINUX = `export LC_ALL=C; a=$(awk '/^cpu / {t=0; for(i=2;i<=9 && i<=NF;i++
 const MAX_CONCURRENT_PROBES = 4;
 const gb = (n) => (n / 1073741824).toFixed(1);
 
+function remotePlatformFromUname(raw) {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (value === "linux") return "linux";
+  if (/^(windows|mingw|msys|cygwin)/.test(value)) return "windows";
+  return null;
+}
+
+function localPlatform() {
+  const value = window().platform;
+  return value === "windows" || value === "linux" ? value : null;
+}
+
 function parseMetrics(raw) {
   try {
     const data = JSON.parse(String(raw).replace(/^\uFEFF/, "").trim());
@@ -25,6 +37,7 @@ function parseMetrics(raw) {
 export class MachineVitals {
   init(cx) {
     this.state = {};
+    this.platforms = {};
     this.busy = {};
     this.sampling = false;
     this.resampleRequested = false;
@@ -53,7 +66,55 @@ export class MachineVitals {
     this.targets = targets;
     this.targetSignature = signature;
     for (const id of Object.keys(this.state)) if (!seen.has(id)) delete this.state[id];
+    for (const id of Object.keys(this.platforms)) if (!seen.has(id)) delete this.platforms[id];
     this.sample(cx, true);
+  }
+
+  async readMetrics(machine) {
+    const options = machine.on ? { on: machine.on } : {};
+    let platform = machine.on ? this.platforms[machine.id] : localPlatform();
+
+    if (machine.on && !platform) {
+      try {
+        const result = await exec("uname", ["-s"], options);
+        if (result.code === 0) {
+          platform = remotePlatformFromUname(result.stdout);
+          if (!platform) return null;
+          this.platforms[machine.id] = platform;
+        }
+      } catch {
+        // Windows usually has no uname; its PowerShell metrics command identifies it.
+      }
+    }
+
+    if (platform) {
+      const data = await this.readForPlatform(platform, options);
+      if (data && machine.on) this.platforms[machine.id] = platform;
+      return data;
+    }
+    if (!machine.on) return null;
+
+    // Some Windows hosts have no uname. A successful PowerShell result identifies Windows;
+    // if it cannot start, try the Linux probe for minimal Linux hosts without uname.
+    const windows = await this.readForPlatform("windows", options);
+    if (windows) {
+      this.platforms[machine.id] = "windows";
+      return windows;
+    }
+    const linux = await this.readForPlatform("linux", options);
+    if (linux) this.platforms[machine.id] = "linux";
+    return linux;
+  }
+
+  async readForPlatform(platform, options) {
+    try {
+      const result = platform === "windows"
+        ? await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", WINDOWS], options)
+        : await exec("sh", ["-c", LINUX], options);
+      return result.code === 0 ? parseMetrics(result.stdout) : null;
+    } catch {
+      return null;
+    }
   }
 
   sample(cx, force = false) {
@@ -71,10 +132,7 @@ export class MachineVitals {
         await Promise.all(
           targets.slice(i, i + MAX_CONCURRENT_PROBES).map(async (machine) => {
             try {
-              const result = machine.on
-                ? await exec("sh", ["-c", LINUX], { on: machine.on })
-                : await exec("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", WINDOWS], {});
-              const data = result.code === 0 ? parseMetrics(result.stdout) : null;
+              const data = await this.readMetrics(machine);
               this.state[machine.id] = data ? { data } : { error: "Unavailable" };
             } catch {
               this.state[machine.id] = { error: "Unavailable" };
