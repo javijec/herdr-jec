@@ -220,7 +220,7 @@ function section(title, summary, t, { expanded = true, onToggle, onTitleClick, c
     .child(div().min_w(22).min_h(22).flex_none().rounded(4).border_1().border_color(t.border)
       .cursor_pointer().hover((style) => style.bg(t.hover)).text_center().text_color(t.muted).on_click(toggle)
       .child(expanded ? "−" : "+"));
-  const output = v_flex().gap(4).px(10).py(7).border_b(1).border_color(t.border);
+  const output = v_flex().flex_none().gap(4).px(10).py(7).border_b(1).border_color(t.border);
   if (expanded && expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
   output.child(heading);
   if (expanded && !expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
