@@ -1,6 +1,6 @@
 import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { theme, run, props, window, shared, setShared, updates, layout } from "herdr";
+import { theme, run, props, window, shared, setShared, updates, layout, keys } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -29,16 +29,28 @@ export default class WorkspaceChrome extends View {
     return div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_click(action).child(label);
   }
+  paletteHint() {
+    const mac = window()?.platform === "macos";
+    const mod = { cmd: mac ? "⌘" : "Ctrl+", ctrl: mac ? "⌃" : "Ctrl+", shift: mac ? "⇧" : "Shift+", alt: mac ? "⌥" : "Alt+", option: mac ? "⌥" : "Alt+" };
+    const binding = keys().find((key) => key.section === "global" && key.action === "app.palette");
+    const parts = binding && binding.keys.endsWith("--") ? [...binding.keys.slice(0, -2).split("-"), "-"] : binding?.keys.split("-");
+    const shortcut = parts && parts.map((part) => mod[part.toLowerCase()] ?? part.toUpperCase()).join("");
+    return shortcut ? `${shortcut}  commands` : "commands";
+  }
   render() {
     const t = theme();
     const collapsed = narrow();
     if (props()?.footer) {
-      const row = (id, icon, label, dim, action) => h_flex().id(id).h(28).px(8).gap(9).items_center().rounded(8)
+      const row = (id, icon, label, dim, action, trailing) => h_flex().id(id).h(28).px(8).gap(9).items_center().rounded(8)
         .text_color(dim ? t.dim : t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).cursor_pointer()
         .on_click(action).child(svg(`mods/workspace-chrome/${icon}.svg`).size(14).text_color(dim ? t.dim : t.muted))
-        .when(!collapsed, el => el.child(label));
+        .when(!collapsed, el => el.child(label))
+        .when(!collapsed && Boolean(trailing), el => el.child(div().flex_1().min_w(0)).child(trailing));
+      const palette = div().id("palette").flex_none().flex().items_center().gap(5).text_size(11).text_color(t.dim)
+        .on_mouse_down("left", (_event, cx) => cx.stop_propagation()).on_click(() => run("app.palette"))
+        .child(this.paletteHint());
       return v_flex().size_full().bg(t.chrome).border_t(1).border_color(t.border).px(8).pt(4).pb(8).text_size(13)
-        .child(row("settings", "settings", "Settings", false, () => run("app.settings"))
+        .child(row("settings", "settings", "Settings", false, () => run("app.settings"), palette)
           .when(Boolean(updates().app.ready), el => el.child(div().size(6).rounded_full().bg(t.accent))))
         .child(row("machine", "plus", "Add machine", true, () => run("mod.open", { name: "machine-add" })));
     }

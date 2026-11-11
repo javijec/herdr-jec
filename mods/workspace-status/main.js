@@ -1,19 +1,8 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, agents, theme, run, window, keys } from "herdr";
+import { spaces, agents, theme } from "herdr";
 
 export default class WorkspaceStatus extends View {
-  // The palette key as actually bound, not a hardcoded one; without a
-  // binding the hint stays useful ("commands") instead of lying.
-  hint(t) {
-    const mac = window()?.platform === "macos";
-    const mod = { cmd: mac ? "⌘" : "Ctrl+", ctrl: mac ? "⌃" : "Ctrl+", shift: mac ? "⇧" : "Shift+", alt: mac ? "⌥" : "Alt+", option: mac ? "⌥" : "Alt+" };
-    const b = keys().find((k) => k.section === "global" && k.action === "app.palette");
-    const parts = b && b.keys.endsWith("--") ? [...b.keys.slice(0, -2).split("-"), "-"] : b?.keys.split("-");
-    const key = parts && parts.map((p) => mod[p.toLowerCase()] ?? p.toUpperCase()).join("");
-    return key ? `${key}  commands` : "commands";
-  }
-
   render() {
     const t = theme();
     const space = spaces().find(s => s.active);
@@ -28,7 +17,6 @@ export default class WorkspaceStatus extends View {
       .child(h_flex().min_w(0).gap(6).items_center().child(div().size(6).flex_none().rounded(3).bg(t.dim))
         .child(div().flex_1().min_w(0).truncate().child(`${list.length} agents`))
         .when(needs > 0, el => el.child(div().flex_1().min_w(0).truncate().text_color(t.blocked).child(`· ${needs} needs you`))))
-      .child(div().flex_1().min_w(0))
-      .child(div().id("palette").flex_none().text_color(t.dim).on_click(() => run("app.palette")).child(this.hint(t)));
+      .child(div().flex_1().min_w(0));
   }
 }
