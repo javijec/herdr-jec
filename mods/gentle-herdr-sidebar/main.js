@@ -592,11 +592,6 @@ export default class GentleHerdrSidebar extends View {
         )],
       }),
       ...(jobs?.length ? [section("Jobs", `${jobs.length} running`, t, { ...sectionOptions("jobs"), children: () => jobDetails(snapshot, t, jobs) })] : []),
-      ...(snapshot && isRecord(snapshot.status.stats) ? [section("Stats", moneyText(snapshot.status.stats.cost) ?? "Session totals", t, {
-        ...sectionOptions("stats"),
-        expandUp: true,
-        children: () => statsDetails(snapshot, t),
-      })] : []),
     ] : [
       section("Status", this.loading ? "Loading" : "Bridge unavailable", t, { ...sectionOptions("status"), children: () => [
         div().text_size(12).text_color(t.muted).child(this.error ?? "No recent bridge snapshot for this pane"),
@@ -617,6 +612,13 @@ export default class GentleHerdrSidebar extends View {
         .child(div().flex_1()))
       .child(v_flex().flex_1().min_h(0)
         .child(v_flex().id("gentle-herdr-sidebar-sections").flex_1().min_h(0).overflow_y_scrollbar()
-          .children(sections)));
+          .children(sections))
+        .when(snapshot && isRecord(snapshot.status.stats), (element) => element.child(
+          section("Stats", moneyText(snapshot.status.stats.cost) ?? "Session totals", t, {
+            ...sectionOptions("stats"),
+            expandUp: true,
+            children: () => statsDetails(snapshot, t),
+          }),
+        )));
   }
 }
