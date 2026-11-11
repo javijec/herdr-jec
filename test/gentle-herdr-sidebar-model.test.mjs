@@ -17,9 +17,14 @@ test("snapshot selection rejects malformed, stale, future and wrong-folder data"
 
 test("agent projection is tab-scoped and clearly disclaims live Gentle Agents progress", () => {
   assert.deepEqual(normalizeHerdrAgents([
+    { space: "s", tab: "t", status: "working", app: "gentle-shell", program: { name: "gentle-shell" } },
+    { space: "s", tab: "t", status: "working", app: "gentle-shell", program: { name: "worker-1" } },
     { space: "s", tab: "t", status: "working", program: { name: "Pi" } },
     { space: "s", tab: "other", status: "working", program: { name: "Other" } },
-  ], { space: "s", tab: "t" }), [{ name: "Pi", status: "working" }]);
+  ], { space: "s", tab: "t" }), [
+    { name: "worker-1", status: "working", app: "gentle-shell" },
+    { name: "Pi", status: "working" },
+  ]);
   assert.equal(agentProgressNotice(), "The live Gentle Agents task progress is unavailable.");
 });
 

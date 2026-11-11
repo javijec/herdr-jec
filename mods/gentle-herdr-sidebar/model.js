@@ -71,6 +71,7 @@ export function normalizeHerdrAgents(value, scope) {
     const name = safeText(program.name, 100) ?? safeText(agent.title, 100);
     if (!name) continue;
     const app = safeText(agent.app, 100);
+    if (name.toLowerCase() === "gentle-shell" && app?.toLowerCase() === "gentle-shell") continue;
     output.push({ name, status: agent.status, ...(app ? { app } : {}) });
   }
   return output;

@@ -22,5 +22,5 @@ test("workspace status shares row width proportionally and truncates long labels
   assert.equal(statusBlock?.min, 170);
 
   const source = readFileSync(new URL("../mods/workspace-status/main.js", import.meta.url), "utf8");
-  assert.match(source, /min_w\(0\)\.truncate\(\)/);
+  assert.match(source, /flex_1\(\)\.min_w\(0\)\.truncate\(\)/);
 });

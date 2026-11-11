@@ -251,8 +251,6 @@ function formatDuration(value) {
 function statusRows(snapshot, t) {
   const status = snapshot.status;
   const output = [
-    row("Folder", snapshot.cwd, t),
-    row("Branch", snapshot.branch, t),
     row("Model / Effort", combineModelEffort(status.model, status.effort), t),
     row("Profile", status.profile, t),
     row("Session", status.sessionName, t),
@@ -265,9 +263,6 @@ function statusRows(snapshot, t) {
     const cost = moneyText(status.cost.usd);
     if (cost) output.push(row(status.cost.sub === true ? "Cost · sub" : "Cost", cost, t));
   }
-  const agentState = safeText(status.agentState, 40);
-  if (agentState) output.push(row("State", stateLabel(agentState) ?? agentState, t, statusColor(t, agentState)));
-
   if (Array.isArray(status.usage)) {
     for (const provider of status.usage.slice(0, 12)) {
       if (!isRecord(provider)) continue;
@@ -317,9 +312,14 @@ function agentDetails(snapshot, t, target, compact = false, liveAgents = []) {
   }
   const jobs = jobItems(snapshot);
   if (jobs?.length) output.push(...jobDetails(snapshot, t, jobs));
-  if (!isRecord(agents) || !items) return output;
+  let hasRows = output.length > 0;
+  if (!isRecord(agents) || !items) {
+    if (!hasRows) output.push(div().pt(5).text_size(12).text_color(t.dim).child("No active agents or jobs"));
+    return output;
+  }
   if (agents.historyPartial === true) output.push(div().text_size(11).text_color(t.ansi3 ?? t.working).child("Recent task history is partial"));
   for (const item of items.slice(0, compact ? 1 : 3)) {
+    hasRows = true;
     const agent = safeText(item.agent, 100) ?? "Agent";
     const label = safeText(item.label, 300) ?? "Finished task";
     const state = safeText(item.state, 32);
@@ -335,6 +335,7 @@ function agentDetails(snapshot, t, target, compact = false, liveAgents = []) {
         formatDuration(item.elapsedMs),
       ].filter(Boolean).join(" · "))));
   }
+  if (!hasRows) output.push(div().pt(5).text_size(12).text_color(t.dim).child("No active agents or jobs"));
   return output;
 }
 
