@@ -23,14 +23,26 @@ test("fill-available sections give their child container a constrained flex heig
   assert.match(section, /if \(fillAvailable\) container\.flex_1\(\)\.min_h\(0\)/);
 });
 
-test("TODO rows have per-item disclosure controls that reveal their notes", () => {
+test("TODO rows use Machine-style chevrons and per-item disclosure reveals notes", () => {
   const start = source.indexOf("function todoDetails(");
   const end = source.indexOf("function jobItems(", start);
   const todoDetails = source.slice(start, end);
   assert.match(todoDetails, /expandedItems\.has\(todoKey\)/);
   assert.match(todoDetails, /onToggleTodo\(todoKey\)/);
-  assert.match(todoDetails, /itemExpanded \? "⌄" : ">"/);
+  assert.match(todoDetails, /todoDisclosureIcon\(itemExpanded, t\)/);
   assert.match(todoDetails, /\.when\(itemExpanded && Boolean\(note\)/);
+  assert.doesNotMatch(todoDetails, /itemExpanded \? "⌄" : ">"/);
+});
+
+test("TODO status indicators omit text labels and color in-progress as working", () => {
+  const start = source.indexOf("function todoDetails(");
+  const end = source.indexOf("function jobItems(", start);
+  const todoDetails = source.slice(start, end);
+  assert.doesNotMatch(todoDetails, /state\.replace\("_", " "\)/);
+  assert.match(todoDetails, /todoStatusColor\(t, state\)/);
+  assert.match(source, /function todoStatusColor\(t, state\) \{\s*return state === "in_progress" \? t\.working : statusColor\(t, state\);/);
+  assert.match(source, /state === "blocked" \|\| state === "failed" \|\| state === "timed_out"\) return t\.blocked/);
+  assert.match(source, /state === "done" \|\| state === "completed"\) return t\.done/);
 });
 
 test("sidebar omits Status whether a bridge snapshot is present or unavailable", () => {

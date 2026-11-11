@@ -1,4 +1,4 @@
-import { View, div } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import {
   agents as herdrAgents,
@@ -169,6 +169,10 @@ function statusColor(t, state) {
   return t.unknown ?? t.muted;
 }
 
+function todoStatusColor(t, state) {
+  return state === "in_progress" ? t.working : statusColor(t, state);
+}
+
 function countText(value) {
   const number = nonNegative(value);
   return number === undefined ? undefined : String(Math.round(number));
@@ -297,6 +301,11 @@ function todoSummary(snapshot) {
   return `${complete} of ${todos.length}`;
 }
 
+function todoDisclosureIcon(expanded, t) {
+  const icon = expanded ? "chevron-down" : "chevron-right";
+  return svg(`mods/gentle-herdr-sidebar/icons/${icon}.svg`).size(12).text_color(t.muted).flex_none();
+}
+
 function todoDetails(snapshot, t, expanded = false, expandedItems = new Set(), onToggleTodo = () => {}) {
   const todos = snapshot.status.todos;
   const items = todoItems(snapshot);
@@ -313,11 +322,10 @@ function todoDetails(snapshot, t, expanded = false, expandedItems = new Set(), o
     const itemExpanded = expandedItems.has(todoKey);
     output.push(v_flex().gap(2).py(3).border_b(1).border_color(t.border)
       .child(h_flex().min_h(22).gap(7).items_center()
-        .child(div().w(13).flex_none().text_size(11).text_color(statusColor(t, state)).child(state === "done" ? "✓" : state === "in_progress" ? "●" : "○"))
+        .child(div().w(13).flex_none().text_size(11).text_color(todoStatusColor(t, state)).child(state === "done" ? "✓" : state === "in_progress" ? "●" : "○"))
         .child(div().flex_1().min_w(0).when(!itemExpanded, (element) => element.truncate()).text_size(12).child(title))
-        .child(div().flex_none().text_size(10).text_color(t.muted).child(state.replace("_", " ")))
-        .child(div().w(14).flex_none().cursor_pointer().text_size(12).text_color(t.muted).text_center()
-          .on_click(() => onToggleTodo(todoKey)).child(itemExpanded ? "⌄" : ">")))
+        .child(div().w(14).flex_none().cursor_pointer().text_color(t.muted)
+          .on_click(() => onToggleTodo(todoKey)).child(todoDisclosureIcon(itemExpanded, t))))
       .when(itemExpanded && Boolean(note), (element) => element.child(div().px(4).text_size(11).text_color(t.dim).child(note))));
   }
   if (expanded && items.length > visible.length) output.push(div().text_size(11).text_color(t.dim).child(`… ${items.length - visible.length} more`));
