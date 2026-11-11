@@ -33,3 +33,22 @@ export function graphLocation(provider) {
   const value = typeof provider === "function" ? provider() : null;
   return { cwd: value?.cwd ?? null, on: value?.on ?? null };
 }
+
+export function requestGraphSync(graph, cx) {
+  const context = graph.key();
+  const ready = Boolean(graph.ctx) && graph.context === context;
+  if (!ready && graph.sourceLocation().cwd) graph.fetchAfterContext = context;
+  if (context && !ready && graph.loading === context) return;
+  graph.refresh(cx);
+  if (ready) graph.fetch(cx);
+}
+
+export function completeGraphSync(graph, cx) {
+  if (graph.loading || graph.again) return false;
+  const context = graph.fetchAfterContext;
+  if (!context) return false;
+  graph.fetchAfterContext = null;
+  if (context !== graph.context || !graph.ctx) return false;
+  graph.fetch(cx);
+  return true;
+}

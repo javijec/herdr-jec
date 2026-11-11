@@ -22,22 +22,11 @@ import {
   StatusLetter,
   Message,
   Menu,
-  MenuLabel,
-  MenuDivider,
   MenuOption,
   TextBox,
   SplitButton,
   SplitTrigger,
 } from "./ui.js";
-
-const VIEWS = [
-  { id: "flat", label: "Flat", icon: "flat" },
-  { id: "tree", label: "Tree", icon: "tree" },
-];
-const LAYOUTS = [
-  { id: "inline", label: "Inline", icon: "diff-inline" },
-  { id: "split", label: "Side by side", icon: "diff-split" },
-];
 
 export const sidebarMethods = {
   // ── Preferences ───────────────────────────────────────────────────────────
@@ -129,18 +118,15 @@ export const sidebarMethods = {
             }),
           ),
       )
-      .when(graphViewForTab(this.tab) !== "git-graph", (el) =>
-        el.child(
-          IconButton({
-            id: "refresh",
-            icon: "refresh",
-            label: "Refresh",
-            spinning: this.refreshSpinning,
-            onClick: (cx) => this.refreshAll(cx),
-          }),
-        ),
-      )
-      .child(this.renderMore());
+      .child(
+        IconButton({
+          id: "sync",
+          icon: "refresh",
+          label: "Sync",
+          spinning: this.refreshSpinning,
+          onClick: (cx) => this.syncAll(cx),
+        }),
+      );
   },
 
   renderGraphToolbar(cx) {
@@ -155,21 +141,13 @@ export const sidebarMethods = {
       .items_center()
       .border_b(1)
       .border_color(t.border)
-      .child(
-        IconButton({
-          id: "refresh",
-          icon: "refresh",
-          label: "Refresh",
-          spinning: this.refreshSpinning,
-          onClick: (cx) => this.refreshAll(cx),
-        }),
-      )
       .when(this.gitGraph.state === "ready", (el) => el.child(this.gitGraph.controls(t)));
   },
 
-  refreshAll(cx) {
+  syncAll(cx) {
     this.refresh(cx);
-    if (graphViewForTab(this.tab) === "git-graph") this.gitGraph?.refresh(cx);
+    this.ensureGitGraph(cx);
+    this.gitGraph.sync(cx);
     if (this.refreshSpinning) return;
     this.refreshSpinning = true;
     cx.notify();
@@ -178,48 +156,12 @@ export const sidebarMethods = {
 
   // Git usually answers at once, so the icon always makes a full turn to be seen.
   stopSpinningWhenRead(cx) {
-    if (this.loading || this.commitsLoading || this.gitGraph?.loading) {
+    if (this.loading || this.commitsLoading || this.gitGraph?.loading || this.gitGraph?.fetching || this.gitGraph?.fetchAfterContext) {
       cx.timer.after(SPIN_MS, (cx) => this.stopSpinningWhenRead(cx));
       return;
     }
     this.refreshSpinning = false;
     cx.notify();
-  },
-
-  renderMore() {
-    const option = (group, choice, selected, set) =>
-      MenuOption({
-        id: `${group}-${choice.id}`,
-        icon: choice.icon,
-        label: choice.label,
-        selected,
-        onClick: (cx) => {
-          this.menuOpen = false;
-          set(choice.id, cx);
-          cx.notify();
-        },
-      });
-    return Menu({
-      id: "more",
-      open: this.menuOpen,
-      focus: this.menuFocus,
-      onOpenChange: (open, cx) => {
-        this.menuOpen = open;
-        cx.notify();
-      },
-      trigger: IconButton({ id: "more-trigger", icon: "more", label: "Options" }),
-      children: [
-        MenuLabel("Changes"),
-        ...VIEWS.map((v) =>
-          option("view", v, this.view === v.id, (id, cx) => this.setView(id, cx)),
-        ),
-        MenuDivider(),
-        MenuLabel("Diff"),
-        ...LAYOUTS.map((l) =>
-          option("layout", l, this.diffLayout === l.id, (id, cx) => this.setDiffLayout(id, cx)),
-        ),
-      ],
-    });
   },
 
   renderChanges() {

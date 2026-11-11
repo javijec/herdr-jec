@@ -9,7 +9,7 @@ import { READ, STATUS, UNCOMMITTED, LABEL, logArgs, parseLog, parseStatus, withU
   menuFor, menuHeight, fileArgs, joinFiles, diffArgs, diffRows } from "./git.js";
 import { perform, openDialog, showChanges } from "./act.js";
 import { icon } from "./menu.js";
-import { graphFocusHandle, graphLocation, graphOverlay, graphPollInterval } from "./host.js";
+import { completeGraphSync, graphFocusHandle, graphLocation, graphOverlay, graphPollInterval, requestGraphSync } from "./host.js";
 import { resizedDetailsHeight } from "./details.js";
 
 function location(folder) {
@@ -93,6 +93,7 @@ export class Graph {
     this.listId = `graph-rows-${Math.random().toString(36).slice(2)}`;
     this.diffId = `${this.listId}-diff`;
     this.all = true; this.remotes = true; this.wide = false; this.graphMax = 160; this.scale = null;
+    this.fetchAfterContext = null;
     this.watchToken = 0; this.seenChange = shared("git-graph.changed");
     this.seen = new Map(); this.commitDetails = new Map();
     this.handle = graphFocusHandle(cx, focusHandle);
@@ -199,6 +200,7 @@ export class Graph {
         if (this.loading === context) {
           this.loading = null; cx.notify();
           if (this.again) this.refresh(cx, this.again === "full");
+          else completeGraphSync(this, cx);
         }
       }
     });
@@ -250,6 +252,7 @@ export class Graph {
 
   loadMore(cx) { this.limit += PAGE; this.refresh(cx); cx.notify(); }
   setScope(all, cx) { if (this.all !== all) { this.all = all; this.limit = PAGE; this.refresh(cx); } cx.notify(); }
+  sync(cx) { requestGraphSync(this, cx); }
   fetch(cx) {
     if (this.fetching || !this.ctx) return;
     this.fetching = true;
@@ -428,17 +431,11 @@ export class Graph {
       .child(svg(icon(glyph)).size(13).flex_none().text_color(active ? t.foreground : t.muted)).when(Boolean(tip), (e) => e.child(tip));
   }
 
-  header(t) {
-    return h_flex().h(42).flex_none().px(14).items_center().border_b(1).border_color(t.border)
-      .child(div().text_size(13).font_semibold().child("Git Graph"));
-  }
-
   controls(t) {
     const segment = (id, text, on, action) => div().id(id).h(29).px(10).flex().items_center().rounded(7).text_size(12.8).cursor_pointer()
       .bg(on ? t.raised : "#00000000").text_color(on ? t.foreground : t.muted).when(on, (e) => e.border_1().border_color(t.border))
       .hover((s) => s.text_color(t.foreground)).on_click(action).child(text);
     return h_flex().gap(8).items_center()
-      .when(this.remoteNames?.length > 0, (e) => e.child(this.iconButton("graph-fetch", "fetch", this.fetching ? "Fetching…" : null, false, (_e, cx) => this.fetch(cx), t)))
       .child(h_flex().p(2).gap(2).rounded(7).bg(t.background).border_1().border_color(t.border)
         .child(segment("graph-all", "All branches", this.all, (_e, cx) => this.setScope(true, cx)))
         .child(segment("graph-current", "Current", !this.all, (_e, cx) => this.setScope(false, cx))));
@@ -569,7 +566,7 @@ export class Graph {
     const changed = shared("git-graph.changed");
     if (changed !== this.seenChange) { this.seenChange = changed; if (this.root) this.refresh(cx); }
     const t = theme(), mono = settings().font_family ?? "JetBrains Mono", ready = this.state === "ready";
-    return v_flex().id("git-graph").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border)
+    return v_flex().id("git-graph").size_full().min_h(0).overflow_hidden()
       .text_color(t.foreground).text_size(13).track_focus(this.handle)
       .on_key_down((e, cx) => {
         if (e.key !== "escape" || !this.selected) return;
@@ -596,7 +593,6 @@ export class Graph {
         this.detailsDrag = null;
         cx.stop_propagation();
       })
-      .child(this.header(t))
       .when(ready, (e) => e.child(this.columns(t, this.graphWidth())).child(this.list(t, mono))
         .when(Boolean(this.selected), (el) => el.child(this.detailsPane(t, mono))))
       .when(!ready, (e) => e.child(this.empty(t)));

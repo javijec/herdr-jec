@@ -68,8 +68,6 @@ class BetterChanges extends View {
       shared("better-changes.diff-layout") ??
       (localStorage.getItem("diff-layout") === "split" ? "split" : "inline");
     if (this.mode === "sidebar") setShared("better-changes.diff-layout", this.diffLayout);
-    this.menuOpen = false;
-    this.menuFocus = cx.focus_handle();
     this.gitGraphFocus = cx.focus_handle();
     this.closed = new Set();
     this.collapsed = new Set(JSON.parse(localStorage.getItem("collapsed") ?? "[]"));
@@ -160,7 +158,7 @@ class BetterChanges extends View {
 
   // `better-changes.<command>`, for keys.
   command(command, cx) {
-    if (command === "refresh") this.refreshAll(cx);
+    if (command === "refresh") this.syncAll(cx);
     if (command === "changes" || command === "commit") this.setTab(command, cx);
     if (command === "flat" || command === "tree") this.setView(command, cx);
     if (command === "inline" || command === "split") this.setDiffLayout(command, cx);
