@@ -33,7 +33,7 @@
               "id": "spaces",
               "type": "block",
               "content": {
-                "mod": "my-better-sidebar"
+                "mod": "jec-sidebar"
               },
               "size": {
                 "weight": 1
@@ -44,7 +44,7 @@
               "id": "agents",
               "type": "block",
               "content": {
-                "mod": "my-better-sidebar",
+                "mod": "jec-sidebar",
                 "props": {
                   "view": "agents"
                 }
@@ -60,7 +60,7 @@
           "id": "sidebar-footer",
           "type": "block",
           "content": {
-            "mod": "my-better-sidebar",
+            "mod": "jec-sidebar",
             "props": {
               "view": "footer"
             }
@@ -93,7 +93,7 @@
               "id": "tabs",
               "type": "block",
               "content": {
-                "mod": "better-tabs",
+                "mod": "jec-tabs",
                 "props": {
                   "rememberPanels": {
                     "container": "panel",
@@ -127,7 +127,7 @@
                     {
                       "id": "prs",
                       "label": "PRs",
-                      "icon": "mods/branch-pr/icons/pull-request.svg",
+                      "icon": "mods/jec-branch-pr/icons/pull-request.svg",
                       "group": "panels",
                       "action": {
                         "type": "panel",
@@ -151,7 +151,7 @@
                     {
                       "id": "issues",
                       "label": "Issues",
-                      "icon": "mods/branch-issue/icons/issue.svg",
+                      "icon": "mods/jec-branch-issue/icons/issue.svg",
                       "group": "panels",
                       "action": {
                         "type": "panel",
@@ -175,7 +175,7 @@
                 "px": 36
               },
               "content": {
-                "mod": "my-better-sidebar",
+                "mod": "jec-sidebar",
                 "props": {
                   "view": "panel-toggle"
                 }
@@ -195,7 +195,7 @@
                 "pane": {
                   "header": {
                     "content": {
-                      "mod": "better-changes"
+                      "mod": "jec-changes"
                     },
                     "reveal": "always",
                     "height": 30,
@@ -228,28 +228,28 @@
                       "id": "files",
                       "type": "block",
                       "content": {
-                        "mod": "better-files"
+                        "mod": "jec-files"
                       }
                     },
                     {
                       "id": "changes",
                       "type": "block",
                       "content": {
-                        "mod": "better-changes"
+                        "mod": "jec-changes"
                       }
                     },
                     {
                       "id": "pull-requests",
                       "type": "block",
                       "content": {
-                        "mod": "branch-pr"
+                        "mod": "jec-branch-pr"
                       }
                     },
                     {
                       "id": "linear-issues",
                       "type": "block",
                       "content": {
-                        "mod": "branch-issue"
+                        "mod": "jec-branch-issue"
                       }
                     },
                     {
@@ -293,13 +293,13 @@
             },
             {
               "content": {
-                "mod": "usage-limits"
+                "mod": "jec-usage-limits"
               },
               "min": 130,
               "size": {
                 "weight": 5
               },
-              "id": "usage-limits",
+              "id": "jec-usage-limits",
               "type": "block"
             }
           ]

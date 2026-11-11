@@ -1,0 +1,6 @@
+{
+  "$schema": "./mod.schema.json",
+  "version": "1.3.0",
+  "place": "none",
+  "title": "JEC Files"
+}

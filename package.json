@@ -7,6 +7,8 @@
     "test": "node --test test/gentle-herdr-sidebar-model.test.mjs test/bridge.test.mjs test/changes.test.mjs test/machine-vitals-metrics.test.mjs test/my-better-sidebar-vitals.test.mjs test/better-changes-patch.test.cjs test/better-changes-git-graph.test.mjs test/install-layout.test.mjs test/better-files-markdown.test.mjs"
   },
   "pi": {
-    "extensions": ["./extensions/gentle-herdr-bridge.mjs"]
+    "extensions": [
+      "./extensions/gentle-herdr-bridge.mjs"
+    ]
   }
 }

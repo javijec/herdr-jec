@@ -121,6 +121,83 @@ foreach ($file in $packageFiles) {
     }
 }
 
+function Merge-JsonSettings($Older, $Newer) {
+  $merged = [ordered]@{}
+  if ($Older) {
+    foreach ($property in $Older.PSObject.Properties) { $merged[$property.Name] = $property.Value }
+  }
+  if ($Newer) {
+    foreach ($property in $Newer.PSObject.Properties) {
+      $previous = $merged[$property.Name]
+      $oldObject = $previous -is [pscustomobject]
+      $newObject = $property.Value -is [pscustomobject]
+      if ($oldObject -and $newObject) {
+        $merged[$property.Name] = Merge-JsonSettings $previous $property.Value
+      } else {
+        $merged[$property.Name] = $property.Value
+      }
+    }
+  }
+  return [pscustomobject]$merged
+}
+
+# Move renamed mods out of the active namespace only after the new copy has been installed.
+$legacyMods = @{
+  'better-changes' = 'jec-changes'
+  'better-files' = 'jec-files'
+  'better-tabs' = 'jec-tabs'
+  'my-better-sidebar' = 'jec-sidebar'
+  'branch-pr' = 'jec-branch-pr'
+  'branch-issue' = 'jec-branch-issue'
+  'usage-limits' = 'jec-usage-limits'
+  'my-machine-vitals' = 'jec-sidebar'
+}
+foreach ($legacyName in $legacyMods.Keys) {
+  $legacyFolder = Join-Path (Join-Path $appHome 'mods') $legacyName
+  if (-not (Test-Path -LiteralPath $legacyFolder -PathType Container)) { continue }
+  $newFolder = Join-Path (Join-Path $appHome 'mods') $legacyMods[$legacyName]
+  if (-not (Test-Path -LiteralPath $newFolder -PathType Container)) {
+    Write-Warning "Legacy mod '$legacyName' was left in place because '$($legacyMods[$legacyName])' is not installed."
+    continue
+  }
+  Assert-NoReparsePointInPath $legacyFolder
+  Assert-NoReparsePointInPath $newFolder
+  $legacyModJson = Join-Path $legacyFolder 'mod.json'
+  $newModJson = Join-Path $newFolder 'mod.json'
+  $archive = Join-Path (Join-Path $backupRoot 'mods') $legacyName
+  if (Test-Path -LiteralPath $archive) {
+    Write-Warning "Legacy mod '$legacyName' was left in place because its backup already exists: $archive"
+    continue
+  }
+  if ($legacyName -ne 'my-machine-vitals' -and (Test-Path -LiteralPath $legacyModJson -PathType Leaf) -and (Test-Path -LiteralPath $newModJson -PathType Leaf)) {
+    $legacyDocument = Get-Content -LiteralPath $legacyModJson -Raw | ConvertFrom-Json
+    $newDocument = Get-Content -LiteralPath $newModJson -Raw | ConvertFrom-Json
+    if ($legacyDocument.settings) {
+      $newSettings = Merge-JsonSettings $legacyDocument.settings $newDocument.settings
+      $newDocument.settings = $newSettings
+      if ($PSCmdlet.ShouldProcess($newModJson, "Migrate settings from '$legacyName' and archive its old mod folder")) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $archive) -Force | Out-Null
+        $newConfigBackup = Join-Path $backupRoot (Join-Path 'new-mods' (Join-Path $legacyMods[$legacyName] 'mod.json'))
+        New-Item -ItemType Directory -Path (Split-Path -Parent $newConfigBackup) -Force | Out-Null
+        Copy-Item -LiteralPath $newModJson -Destination $newConfigBackup
+        $temp = $newModJson + '.migration-tmp'
+        [IO.File]::WriteAllText($temp, ($newDocument | ConvertTo-Json -Depth 100) + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+        Move-Item -LiteralPath $temp -Destination $newModJson -Force
+        Move-Item -LiteralPath $legacyFolder -Destination $archive
+      }
+    } elseif ($PSCmdlet.ShouldProcess($legacyFolder, "Archive renamed legacy mod folder")) {
+      New-Item -ItemType Directory -Path (Split-Path -Parent $archive) -Force | Out-Null
+      Move-Item -LiteralPath $legacyFolder -Destination $archive
+    }
+  } elseif ($legacyName -ne 'my-machine-vitals' -and (Test-Path -LiteralPath $legacyModJson -PathType Leaf) -and -not (Test-Path -LiteralPath $newModJson -PathType Leaf)) {
+    Write-Warning "Legacy mod '$legacyName' was left in place because its new mod.json is unavailable."
+    continue
+  } elseif ($PSCmdlet.ShouldProcess($legacyFolder, "Archive renamed legacy mod folder")) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $archive) -Force | Out-Null
+    Move-Item -LiteralPath $legacyFolder -Destination $archive
+  }
+}
+
 Write-Host "Layout files copied: $copied; already identical: $identical; conflicts skipped: $conflicts; WhatIf actions: $planned."
 Write-Host 'The Gentle Herdr bridge extension is not installed or enabled by this script; configure it separately if you use it.'
 

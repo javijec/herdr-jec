@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '../mods/better-changes/views/diff.js'), 'utf8')
+const source = fs.readFileSync(path.join(__dirname, '../mods/jec-changes/views/diff.js'), 'utf8')
   .replace(/^import[\s\S]*?;\s*/gm, '')
   .replace('export const diffMethods =', 'globalThis.diffMethods =');
 const context = vm.createContext({});
@@ -46,7 +46,7 @@ test('patch selection uses its supplied file and labels the header with the PR',
   same(head, {
     title: 'a.go',
     detail: 'src · PR #5',
-    icon: 'mods/better-changes/icons/file.svg',
+    icon: 'mods/jec-changes/icons/file.svg',
     add: 1,
     del: 1,
   });

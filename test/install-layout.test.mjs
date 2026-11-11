@@ -38,7 +38,7 @@ test("installer copies the layout, mods, and themes into an empty app home", { s
     const appHome = join(scratch, "app");
     const result = runInstall(appHome);
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.equal(existsSync(join(appHome, "mods", "better-changes", "jsconfig.json")), false);
+    assert.equal(existsSync(join(appHome, "mods", "jec-changes", "jsconfig.json")), false);
     for (const folder of ["layouts", "mods", "themes"]) {
       if (!existsSync(join(root, folder))) continue;
       const sources = filesBelow(join(root, folder));
@@ -57,7 +57,7 @@ test("installer skips differing existing files unless replacement is requested, 
   const scratch = mkdtempSync(join(tmpdir(), "herdr-layout-conflict-"));
   try {
     const appHome = join(scratch, "app");
-    const target = join(appHome, "mods", "better-changes", "mod.json");
+    const target = join(appHome, "mods", "jec-changes", "mod.json");
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, "user-owned content\n");
 
@@ -72,6 +72,30 @@ test("installer skips differing existing files unless replacement is requested, 
     const backups = filesBelow(join(appHome, ".herdr-layout-backups"));
     assert.equal(backups.length, 1);
     assert.equal(readFileSync(backups[0], "utf8"), "user-owned content\n");
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("installer migrates legacy mod settings and archives old mod folders", { skip: !available }, () => {
+  const scratch = mkdtempSync(join(tmpdir(), "herdr-layout-migrate-"));
+  try {
+    const appHome = join(scratch, "app");
+    const oldFolder = join(appHome, "mods", "better-changes");
+    const newFolder = join(appHome, "mods", "jec-changes");
+    mkdirSync(oldFolder, { recursive: true });
+    mkdirSync(newFolder, { recursive: true });
+    writeFileSync(join(oldFolder, "mod.json"), JSON.stringify({ settings: { panel: { toggle: "ctrl-shift-c" }, oldOnly: true } }));
+    writeFileSync(join(oldFolder, "custom.js"), "user custom file\n");
+    writeFileSync(join(newFolder, "mod.json"), JSON.stringify({ title: "JEC Changes", settings: { panel: { toggle: "alt-c" }, newOnly: true } }));
+
+    const result = runInstall(appHome);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const installed = JSON.parse(readFileSync(join(newFolder, "mod.json"), "utf8"));
+    assert.deepEqual(installed.settings, { panel: { toggle: "alt-c" }, oldOnly: true, newOnly: true });
+    assert.equal(existsSync(oldFolder), false);
+    const archived = join(appHome, ".herdr-layout-backups");
+    assert.equal(filesBelow(archived).some((path) => path.endsWith(join("mods", "better-changes", "custom.js"))), true);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -108,7 +132,7 @@ test("installer rejects destination junctions before writing outside app home", 
     const result = runInstall(appHome);
     assert.notEqual(result.status, 0);
     assert.match(`${result.stdout}\n${result.stderr}`, /reparse point/i);
-    assert.equal(existsSync(join(outside, "better-changes", "mod.json")), false);
+    assert.equal(existsSync(join(outside, "jec-changes", "mod.json")), false);
     assert.equal(existsSync(join(appHome, "layouts", "javijec.json")), false);
   } finally {
     rmSync(scratch, { recursive: true, force: true });

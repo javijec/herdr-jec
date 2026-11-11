@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isMarkdown, markdownBlocks, resolvePath } from "../mods/better-files/files/model.js";
+import { isMarkdown, markdownBlocks, resolvePath } from "../mods/jec-files/files/model.js";
 
 test("recognizes Markdown extensions without case sensitivity", () => {
   assert.equal(isMarkdown("/docs/guide.MD"), true);

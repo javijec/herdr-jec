@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { parseMetrics } from "../mods/jec-sidebar/views/metrics.js";
 
 const source = readFileSync(
-  fileURLToPath(new URL("../mods/my-better-sidebar/views/vitals.js", import.meta.url)),
+  fileURLToPath(new URL("../mods/jec-sidebar/views/vitals.js", import.meta.url)),
   "utf8",
 )
   .replace(/^import\s+[\s\S]*?;\n/gm, "")
@@ -32,6 +33,7 @@ function harness(platform, run) {
     Number,
     Object,
     String,
+    parseMetrics,
     Promise,
     console,
     window: () => ({ platform, active: true }),
@@ -122,7 +124,7 @@ test("removing a disconnected machine clears its metrics and platform cache", as
 
 test("space creation is allowed only on the local or connected machine", async () => {
   const spacesSource = readFileSync(
-    fileURLToPath(new URL("../mods/my-better-sidebar/views/spaces.js", import.meta.url)),
+    fileURLToPath(new URL("../mods/jec-sidebar/views/spaces.js", import.meta.url)),
     "utf8",
   )
     .replace(/^import\s+[\s\S]*?;\n/gm, "")
