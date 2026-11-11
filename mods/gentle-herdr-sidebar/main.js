@@ -15,8 +15,6 @@ import {
   theme,
 } from "herdr";
 import {
-  combineModelEffort,
-  contextProgressBar,
   formatPercent,
   isRecord,
   isSectionExpanded,
@@ -198,16 +196,6 @@ function row(label, value, t, valueColor = t.foreground) {
     .child(div().min_w(0).truncate().text_right().text_size(12).text_color(valueColor).child(safeValue));
 }
 
-function contextUsageRow(progress, t) {
-  const color = colorForTone(t, progress.tone);
-  return h_flex().min_h(22).gap(8).items_center()
-    .child(div().text_size(12).text_color(t.dim).child("Context"))
-    .child(div().flex_1().min_w(0))
-    .child(div().w(90).h(6).rounded(3).bg(t.border)
-      .child(div().w(progress.width).h(6).rounded(3).bg(color)))
-    .child(div().w(40).flex_none().text_size(12).text_right().text_color(color).child(progress.label));
-}
-
 function section(title, summary, t, { expanded = true, onToggle, onTitleClick, children = () => [], expandUp = false, borderBottom = true, fillAvailable = false } = {}) {
   const toggle = () => onToggle?.();
   let titleLabel = div().flex_none().font_semibold().text_color(t.foreground).child(title);
@@ -251,14 +239,9 @@ function formatDuration(value) {
 function statusRows(snapshot, t) {
   const status = snapshot.status;
   const output = [
-    row("Model / Effort", combineModelEffort(status.model, status.effort), t),
     row("Profile", status.profile, t),
     row("Session", status.sessionName, t),
   ];
-  if (isRecord(status.context)) {
-    const progress = contextProgressBar(status.context.pct);
-    if (progress) output.push(contextUsageRow(progress, t));
-  }
   if (isRecord(status.cost)) {
     const cost = moneyText(status.cost.usd);
     if (cost) output.push(row(status.cost.sub === true ? "Cost · sub" : "Cost", cost, t));

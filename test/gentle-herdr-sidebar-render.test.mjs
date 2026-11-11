@@ -16,11 +16,12 @@ test("empty Agents & Jobs section shows a muted empty state", () => {
   assert.match(source, /text_color\(t\.dim\)\.child\("No active agents or jobs"\)/);
 });
 
-test("Status omits the Folder, Branch, and State rows", () => {
+test("Status omits the Folder, Branch, State, Model / Effort, and Context rows", () => {
   const start = source.indexOf("function statusRows(");
   const end = source.indexOf("function agentItems(", start);
   const statusRows = source.slice(start, end);
-  for (const label of ["Folder", "Branch", "State"]) {
+  for (const label of ["Folder", "Branch", "State", "Model / Effort"]) {
     assert.doesNotMatch(statusRows, new RegExp(`row\\(\\"${label}\\"`));
   }
+  assert.doesNotMatch(statusRows, /contextUsageRow/);
 });

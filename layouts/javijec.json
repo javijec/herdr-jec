@@ -286,9 +286,9 @@
                 "mod": "workspace-status"
               },
               "size": {
-                "weight": 2
+                "weight": 4
               },
-              "min": 170,
+              "min": 420,
               "id": "status",
               "type": "block"
             },
