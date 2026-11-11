@@ -20,6 +20,11 @@ import {
 } from "herdr";
 import { findNode } from "./find-node.js";
 import { TEXT, Icon, IconButton, GroupHeader, Menu, MenuLabel, MenuOption } from "./ui.js";
+import {
+  isAgentOnDisconnectedMachine,
+  MACHINE_STATES_KEY,
+  machineNameForAgentAddress,
+} from "./machine-availability.js";
 
 // The sidebar's rail goes by its width, not a flag: dragging its edge narrows it too.
 const narrow = () => (findNode(layout(), "sidebar")?.size?.px ?? Infinity) < 160;
@@ -276,11 +281,12 @@ export class Agents {
     });
   }
 
-  subRow(t, s, shown, compact) {
+  subRow(t, s, shown, compact, machineStates) {
     const k = s.t;
     const st = kidStatus(k, this.listed);
     const pic = icon(k.program, 14, t.foreground);
     const on = k.address === shown;
+    const offline = isAgentOnDisconnectedMachine(k.address, machineStates);
     return h_flex()
       .id(`sub-${k.address}`)
       .pl(39)
@@ -292,8 +298,10 @@ export class Agents {
       .items_center()
       .text_size(12.5)
       .when(on, (el) => el.bg(t.raised))
-      .hover((s) => s.bg(t.hover))
-      .on_click(() => this.peek(k.address))
+      .when(offline, (el) => el.opacity(0.45))
+      .when(!offline, (el) =>
+        el.hover((s) => s.bg(t.hover)).on_click(() => this.peek(k.address)),
+      )
       .children(
         s.lines.map((l) =>
           div()
@@ -423,6 +431,7 @@ export class Agents {
       sort,
       all,
       now,
+      machineStates: shared(MACHINE_STATES_KEY),
       byPriority,
       collapsed: narrow(),
       shown: focused()?.agent,
@@ -538,14 +547,18 @@ export class Agents {
   }
 
   agentWithSubs(a, i, view, t) {
-    if (view.collapsed) return [this.railRow(a, i, t)];
+    const offline = isAgentOnDisconnectedMachine(a.address, view.machineStates);
+    if (view.collapsed) return [this.railRow(a, i, t, offline)];
     const subs = this.tree(view.all, a.address);
-    const row = this.agentRow(a, subs, view, t);
+    const row = this.agentRow(a, subs, view, t, offline);
     if (this.folded.has(a.address)) return [row];
-    return [row, ...subs.map((s) => this.subRow(t, s, view.shown, view.byPriority))];
+    return [
+      row,
+      ...subs.map((s) => this.subRow(t, s, view.shown, view.byPriority, view.machineStates)),
+    ];
   }
 
-  railRow(a, i, t) {
+  railRow(a, i, t, offline = false) {
     return h_flex()
       .id(`ag-${a.address}`)
       .h(26)
@@ -553,8 +566,10 @@ export class Agents {
       .flex_none()
       .items_center()
       .gap(4)
-      .hover((s) => s.bg(t.hover))
-      .on_click(() => run("pane.focus", { pane: a.pane }))
+      .when(offline, (el) => el.opacity(0.45))
+      .when(!offline, (el) =>
+        el.hover((s) => s.bg(t.hover)).on_click(() => run("pane.focus", { pane: a.pane })),
+      )
       .child(
         div()
           .flex_1()
@@ -574,12 +589,12 @@ export class Agents {
       );
   }
 
-  agentRow(a, subs, view, t) {
+  agentRow(a, subs, view, t, offline = false) {
     const pic = icon(a.program, 16, t.foreground);
-    const hovered = this.hovered === a.address;
+    const hovered = !offline && this.hovered === a.address;
     const when = this.since(a);
     // An agent on another machine (`vps/t7`) says which.
-    const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
+    const machine = machineNameForAgentAddress(a.address);
     return h_flex()
       .id(`ag-${a.address}`)
       .relative()
@@ -589,20 +604,23 @@ export class Agents {
       .items_center()
       .gap(9)
       .when(a.focused, (el) => el.child(div().absolute().left(0).right(0).top(0).bottom(0).bg(t.selected).opacity(0.55)))
-      .cursor_pointer()
-      .hover((s) => s.bg(t.hover))
-      .on_hover((on, cx) => {
-        if (on) this.hovered = a.address;
-        else if (hovered) this.hovered = null;
-        cx.notify();
-      })
-      .on_click(() => run("pane.focus", { pane: a.pane }))
-      .when(Boolean(pic), (el) => el.child(this.agentIcon(a, pic, subs)))
+      .when(offline, (el) => el.opacity(0.45))
+      .when(!offline, (el) =>
+        el.cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_hover((on, cx) => {
+            if (on) this.hovered = a.address;
+            else if (hovered) this.hovered = null;
+            cx.notify();
+          })
+          .on_click(() => run("pane.focus", { pane: a.pane })),
+      )
+      .when(Boolean(pic), (el) => el.child(this.agentIcon(a, pic, subs, offline)))
       .child(this.agentName(a, view, t))
       .when(Boolean(machine), (el) =>
         el.child(div().text_size(TEXT.badge).text_color(t.dim).child(machine)),
       )
-      .when(subs.length > 0, (el) => el.child(this.foldButton(a, subs, t)))
+      .when(subs.length > 0 && !offline, (el) => el.child(this.foldButton(a, subs, t)))
       .when(hovered, (el) => el.child(this.pinButton(a, t)))
       .when(!hovered && Boolean(when), (el) =>
         el.child(
@@ -617,10 +635,10 @@ export class Agents {
   }
 
   // With sub-agents, clicking the icon folds them.
-  agentIcon(a, pic, subs) {
+  agentIcon(a, pic, subs, offline = false) {
     return div()
       .id(`agent-fold-${a.address}`)
-      .when(subs.length > 0, (el) =>
+      .when(subs.length > 0 && !offline, (el) =>
         el.on_click((_e, cx) => {
           cx.stop_propagation();
           this.toggleFold(a.address, cx);

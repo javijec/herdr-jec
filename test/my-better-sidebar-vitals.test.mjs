@@ -4,6 +4,21 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { parseMetrics } from "../mods/jec-sidebar/views/metrics.js";
+import {
+  isAgentOnDisconnectedMachine,
+  isDisconnectedMachine,
+  machineNameForAgentAddress,
+  machineStatesByName,
+} from "../mods/jec-sidebar/views/machine-availability.js";
+
+const spacesSource = readFileSync(
+  fileURLToPath(new URL("../mods/jec-sidebar/views/spaces.js", import.meta.url)),
+  "utf8",
+);
+const agentsSource = readFileSync(
+  fileURLToPath(new URL("../mods/jec-sidebar/views/agents.js", import.meta.url)),
+  "utf8",
+);
 
 const source = readFileSync(
   fileURLToPath(new URL("../mods/jec-sidebar/views/vitals.js", import.meta.url)),
@@ -162,18 +177,65 @@ test("sidebar supports parts without init while initializing parts that provide 
 });
 
 test("space creation is allowed only on the local or connected machine", async () => {
-  const spacesSource = readFileSync(
-    fileURLToPath(new URL("../mods/jec-sidebar/views/spaces.js", import.meta.url)),
-    "utf8",
-  )
+  const source = spacesSource
     .replace(/^import\s+[\s\S]*?;\n/gm, "")
     .replace("export class Spaces", "globalThis.Spaces = class Spaces");
   const context = vm.createContext({ Object, Set, Map, Array, String, Number, JSON, Math, Date });
-  vm.runInContext(spacesSource, context);
+  vm.runInContext(source, context);
   const spaces = Object.create(context.Spaces.prototype);
   spaces.machines = [{ name: "online", state: "connected" }, { name: "offline", state: "disconnected" }];
 
   assert.equal(spaces.machineConnected(null), true);
   assert.equal(spaces.machineConnected("online"), true);
   assert.equal(spaces.machineConnected("offline"), false);
+});
+
+test("machine status snapshots identify only known disconnected machines", () => {
+  const states = machineStatesByName([
+    { name: "online", state: "connected" },
+    { name: "offline", state: "disconnected" },
+    { name: "invalid", state: 1 },
+    null,
+  ], ["known-space-without-machine-record"]);
+  assert.deepEqual(states, {
+    "known-space-without-machine-record": "disconnected",
+    offline: "disconnected",
+    online: "connected",
+  });
+  assert.equal(isDisconnectedMachine("offline", states), true);
+  assert.equal(isDisconnectedMachine("online", states), false);
+  assert.equal(isDisconnectedMachine("unknown", states), false);
+});
+
+test("remote agents map to a machine and inherit its disconnected state", () => {
+  const states = { vps: "disconnected", office: "connected" };
+  assert.equal(machineNameForAgentAddress("vps/t7"), "vps");
+  assert.equal(machineNameForAgentAddress("local-pane"), null);
+  assert.equal(isAgentOnDisconnectedMachine("vps/t7", states), true);
+  assert.equal(isAgentOnDisconnectedMachine("office/t2", states), false);
+  assert.equal(isAgentOnDisconnectedMachine("local-pane", states), false);
+});
+
+test("disconnected machine groups collapse and omit all children", () => {
+  const start = spacesSource.indexOf("  grouped(t, collapsed)");
+  const end = spacesSource.indexOf("  machineConnected(m)", start);
+  const grouped = spacesSource.slice(start, end);
+  assert.match(grouped, /if \(this\.machineCollapsed\(m\)\) return \[head\]/);
+  assert.match(spacesSource, /machineCollapsed\(m\) \{\s*return this\.folded\.has\(m\) \|\| this\.machineDisconnected\(m\);/);
+  assert.match(spacesSource, /setShared\(MACHINE_STATES_KEY, this\.machineStates\)/);
+});
+
+test("disconnected agents are dimmed and their row actions are conditional", () => {
+  assert.match(agentsSource, /machineStates: shared\(MACHINE_STATES_KEY\)/);
+  assert.match(agentsSource, /isAgentOnDisconnectedMachine\(a\.address, view\.machineStates\)/);
+  for (const method of ["railRow", "agentRow", "subRow"]) {
+    const start = agentsSource.indexOf(`  ${method}(`);
+    assert.notEqual(start, -1, `${method} renderer exists`);
+    const nextMethod = agentsSource.slice(start + 1).match(/\n  [A-Za-z][A-Za-z0-9]*\(/);
+    const end = nextMethod ? start + 1 + nextMethod.index : agentsSource.length;
+    const body = agentsSource.slice(start, end);
+    assert.match(body, /offline/);
+    assert.match(body, /opacity\(0\.45\)/);
+    assert.match(body, /\.when\(!offline,/);
+  }
 });

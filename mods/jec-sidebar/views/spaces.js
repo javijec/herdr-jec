@@ -4,6 +4,7 @@ import { div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import {
   spaces,
+  agents as herdrAgents,
   machines,
   panes,
   run,
@@ -22,6 +23,12 @@ import { loadSettings, duration } from "../settings.js";
 import { findNode } from "./find-node.js";
 import { TEXT, Icon, IconButton, Badge } from "./ui.js";
 import { MachineVitals } from "./vitals.js";
+import {
+  isDisconnectedMachine,
+  MACHINE_STATES_KEY,
+  machineNameForAgentAddress,
+  machineStatesByName,
+} from "./machine-availability.js";
 
 const rowHeight = ({ tree }) => (tree ? 28 : 30);
 
@@ -76,6 +83,7 @@ export class Spaces {
     this.pressed = null;
     this.over = null;
     this.machines = [];
+    this.machineStates = {};
     this.vitals = new MachineVitals();
     this.vitals.init(cx);
     this.folded = new Set();
@@ -226,8 +234,16 @@ export class Spaces {
     cx.spawn(async (cx) => {
       try {
         const r = await hc(["machine", "ls", "--json"]);
-        if (r.code === 0)
+        if (r.code === 0) {
           this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => !m.temporary);
+          const knownMachines = [
+            ...spaces().map((space) => space.machine),
+            ...herdrAgents().map((agent) => machineNameForAgentAddress(agent.address)),
+          ];
+          this.machineStates = machineStatesByName(this.machines, knownMachines);
+          if (JSON.stringify(shared(MACHINE_STATES_KEY) ?? {}) !== JSON.stringify(this.machineStates))
+            setShared(MACHINE_STATES_KEY, this.machineStates);
+        }
         this.updateVitalsTargets(cx);
       } catch {
         // Keep the last machine list if core is temporarily unavailable.
@@ -375,7 +391,7 @@ export class Spaces {
     }
     return [null, ...remote].flatMap((m) => {
       const head = this.machineHeader(m, t, collapsed);
-      if (this.folded.has(m)) return [head];
+      if (this.machineCollapsed(m)) return [head];
       const metrics = this.vitals.isTarget(m) ? [this.vitals.renderFor(m, collapsed)] : [];
       const mine = rows.filter((r) => (r.w.machine ?? null) === m);
       if (mine.length) return [head, ...metrics, ...mine.map(draw)];
@@ -386,6 +402,14 @@ export class Spaces {
           : null;
       return [head, ...metrics, ...(placeholder ? [placeholder] : [])];
     });
+  }
+
+  machineDisconnected(m) {
+    return isDisconnectedMachine(m, this.machineStates);
+  }
+
+  machineCollapsed(m) {
+    return this.folded.has(m) || this.machineDisconnected(m);
   }
 
   machineConnected(m) {
@@ -432,6 +456,8 @@ export class Spaces {
   machineHeader(m, t, collapsed) {
     const machine = this.machines.find((k) => k.name === m);
     const connected = this.machineConnected(m);
+    const disconnected = this.machineDisconnected(m);
+    const folded = this.machineCollapsed(m);
     const head = h_flex()
       .id(`machine-${m ?? "local"}`)
       .h(26)
@@ -442,13 +468,15 @@ export class Spaces {
       .text_size(TEXT.caption)
       .text_color(t.dim)
       .when(m !== null, (el) => el.mt(4).border_t(1).border_color(t.border))
-      .cursor_pointer()
-      .hover((s) => s.bg(t.hover))
-      .on_click((_e, cx) => {
-        if (!this.folded.delete(m)) this.folded.add(m);
-        localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
-        cx.notify();
-      })
+      .when(!disconnected, (el) =>
+        el.cursor_pointer()
+          .hover((s) => s.bg(t.hover))
+          .on_click((_e, cx) => {
+            if (!this.folded.delete(m)) this.folded.add(m);
+            localStorage.setItem("machines.folded", JSON.stringify([...this.folded]));
+            cx.notify();
+          }),
+      )
       .child(Icon(m ? "server" : "monitor", 13));
     if (collapsed) return head;
     return head
@@ -473,7 +501,7 @@ export class Spaces {
           .flex_none()
           .bg(connected ? t.ansi2 : t.dim),
       )
-      .child(Icon(`chevron-${this.folded.has(m) ? "right" : "down"}`, 11));
+      .child(Icon(`chevron-${folded ? "right" : "down"}`, 11));
   }
 
   machineAddButton(m, t) {
