@@ -93,6 +93,7 @@ export const sidebarMethods = {
     if (this.mode === "diff") return this.renderDiff();
     return Panel({ id: "jec-changes" })
       .child(this.renderHeader())
+      .when(graphViewForTab(this.tab) === "git-graph", (el) => el.child(this.renderGraphToolbar(cx)))
       .child(
         graphViewForTab(this.tab) === "git-graph" ? this.renderGitGraph(cx) : this.renderChanges(),
       );
@@ -128,6 +129,32 @@ export const sidebarMethods = {
             }),
           ),
       )
+      .when(graphViewForTab(this.tab) !== "git-graph", (el) =>
+        el.child(
+          IconButton({
+            id: "refresh",
+            icon: "refresh",
+            label: "Refresh",
+            spinning: this.refreshSpinning,
+            onClick: (cx) => this.refreshAll(cx),
+          }),
+        ),
+      )
+      .child(this.renderMore());
+  },
+
+  renderGraphToolbar(cx) {
+    this.ensureGitGraph(cx);
+    const t = theme();
+    return h_flex()
+      .id("git-graph-controls")
+      .h(38)
+      .flex_none()
+      .px(10)
+      .gap(8)
+      .items_center()
+      .border_b(1)
+      .border_color(t.border)
       .child(
         IconButton({
           id: "refresh",
@@ -137,7 +164,7 @@ export const sidebarMethods = {
           onClick: (cx) => this.refreshAll(cx),
         }),
       )
-      .child(this.renderMore());
+      .when(this.gitGraph.state === "ready", (el) => el.child(this.gitGraph.controls(t)));
   },
 
   refreshAll(cx) {

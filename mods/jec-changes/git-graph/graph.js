@@ -250,8 +250,6 @@ export class Graph {
 
   loadMore(cx) { this.limit += PAGE; this.refresh(cx); cx.notify(); }
   setScope(all, cx) { if (this.all !== all) { this.all = all; this.limit = PAGE; this.refresh(cx); } cx.notify(); }
-  setRemotes(cx) { this.remotes = !this.remotes; this.refresh(cx); cx.notify(); }
-
   fetch(cx) {
     if (this.fetching || !this.ctx) return;
     this.fetching = true;
@@ -431,31 +429,19 @@ export class Graph {
   }
 
   header(t) {
-    const ready = this.state === "ready" || this.state === "empty";
-    const where = this.current ?? (this.head ? `detached at ${this.head.slice(0, 8)}` : null);
-    return h_flex().h(42).flex_none().px(14).gap(8).items_center().border_b(1).border_color(t.border)
-      .child(div().text_size(13).font_semibold().child("Git Graph"))
-      // Which branch you're on, always in view.
-      .when(ready && Boolean(where), (e) => e.child(h_flex().h(22).px(7).gap(5).min_w(0).items_center().rounded(6).bg(t.accent + "26").text_color(t.accent)
-        .child(svg(icon(this.current ? "branch" : "commit")).size(12).flex_none().text_color(t.accent)).child(div().min_w(0).truncate().text_size(11.5).font_semibold().child(where))))
-      .child(div().flex_1())
-      .when(ready && this.remoteNames?.length > 0, (e) => e.child(this.iconButton("graph-fetch", "fetch", this.fetching ? "Fetching…" : null, false, (_e, cx) => this.fetch(cx), t)))
-      .when(this.state !== "nofolder", (e) => e.child(this.iconButton("graph-refresh", "refresh", null, false, (_e, cx) => this.refresh(cx), t)));
+    return h_flex().h(42).flex_none().px(14).items_center().border_b(1).border_color(t.border)
+      .child(div().text_size(13).font_semibold().child("Git Graph"));
   }
 
-  toolbar(t) {
+  controls(t) {
     const segment = (id, text, on, action) => div().id(id).h(29).px(10).flex().items_center().rounded(7).text_size(12.8).cursor_pointer()
       .bg(on ? t.raised : "#00000000").text_color(on ? t.foreground : t.muted).when(on, (e) => e.border_1().border_color(t.border))
       .hover((s) => s.text_color(t.foreground)).on_click(action).child(text);
-    return h_flex().h(42).flex_none().px(10).gap(8).items_center().border_b(1).border_color(t.border)
+    return h_flex().gap(8).items_center()
+      .when(this.remoteNames?.length > 0, (e) => e.child(this.iconButton("graph-fetch", "fetch", this.fetching ? "Fetching…" : null, false, (_e, cx) => this.fetch(cx), t)))
       .child(h_flex().p(2).gap(2).rounded(7).bg(t.background).border_1().border_color(t.border)
         .child(segment("graph-all", "All branches", this.all, (_e, cx) => this.setScope(true, cx)))
-        .child(segment("graph-current", "Current", !this.all, (_e, cx) => this.setScope(false, cx))))
-      .child(h_flex().id("graph-remotes").h(24).px(6).gap(6).items_center().rounded(6).cursor_pointer().text_size(11.5).text_color(t.muted)
-        .hover((s) => s.bg(t.hover).text_color(t.foreground)).on_click((_e, cx) => this.setRemotes(cx))
-        .child(div().size(13).rounded(3).border_1().border_color(this.remotes ? t.accent : t.input).when(this.remotes, (e) => e.bg(t.accent)).flex().items_center().justify_center()
-          .when(this.remotes, (e) => e.child(svg(icon("check")).size(10).text_color(t.accent_foreground))))
-        .child("Remotes"));
+        .child(segment("graph-current", "Current", !this.all, (_e, cx) => this.setScope(false, cx))));
   }
 
   columns(t, width) {
@@ -611,7 +597,7 @@ export class Graph {
         cx.stop_propagation();
       })
       .child(this.header(t))
-      .when(ready, (e) => e.child(this.toolbar(t)).child(this.columns(t, this.graphWidth())).child(this.list(t, mono))
+      .when(ready, (e) => e.child(this.columns(t, this.graphWidth())).child(this.list(t, mono))
         .when(Boolean(this.selected), (el) => el.child(this.detailsPane(t, mono))))
       .when(!ready, (e) => e.child(this.empty(t)));
   }
