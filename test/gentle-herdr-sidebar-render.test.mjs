@@ -23,12 +23,6 @@ test("fill-available sections give their child container a constrained flex heig
   assert.match(section, /if \(fillAvailable\) container\.flex_1\(\)\.min_h\(0\)/);
 });
 
-test("Status omits the Folder, Branch, State, Model / Effort, and Context rows", () => {
-  const start = source.indexOf("function statusRows(");
-  const end = source.indexOf("function agentItems(", start);
-  const statusRows = source.slice(start, end);
-  for (const label of ["Folder", "Branch", "State", "Model / Effort"]) {
-    assert.doesNotMatch(statusRows, new RegExp(`row\\(\\"${label}\\"`));
-  }
-  assert.doesNotMatch(statusRows, /contextUsageRow/);
+test("sidebar omits Status whether a bridge snapshot is present or unavailable", () => {
+  assert.doesNotMatch(source, /section\(\"Status\"/);
 });

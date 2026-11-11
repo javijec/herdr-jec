@@ -21,7 +21,6 @@ import {
   normalizeGentleAgentTasks,
   nonNegative,
   previewTodos,
-  percentTone,
   retainFreshSnapshot,
   retainHerdrAgentSnapshot,
   resolveSectionChildren,
@@ -160,12 +159,6 @@ async function readSnapshots(target, override, now) {
   return snapshots.filter(Boolean);
 }
 
-function colorForTone(t, tone) {
-  if (tone === "danger") return t.ansi1 ?? t.blocked;
-  if (tone === "warning") return t.ansi3 ?? t.working;
-  return t.foreground;
-}
-
 function statusColor(t, state) {
   if (state === "working" || state === "running") return t.working;
   if (state === "blocked" || state === "failed" || state === "timed_out") return t.blocked;
@@ -239,41 +232,6 @@ function formatDuration(value) {
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function statusRows(snapshot, t) {
-  const status = snapshot.status;
-  const output = [
-    row("Profile", status.profile, t),
-    row("Session", status.sessionName, t),
-  ];
-  if (isRecord(status.cost)) {
-    const cost = moneyText(status.cost.usd);
-    if (cost) output.push(row(status.cost.sub === true ? "Cost · sub" : "Cost", cost, t));
-  }
-  if (Array.isArray(status.usage)) {
-    for (const provider of status.usage.slice(0, 12)) {
-      if (!isRecord(provider)) continue;
-      const providerName = safeText(provider.provider, 100);
-      if (!providerName || !Array.isArray(provider.limits)) continue;
-      for (const limit of provider.limits.slice(0, 12)) {
-        if (!isRecord(limit) || !Array.isArray(limit.windows)) continue;
-        for (const usageWindow of limit.windows.slice(0, 8)) {
-          if (!isRecord(usageWindow)) continue;
-          const pct = formatPercent(usageWindow.usedPercent);
-          const label = safeText(usageWindow.label, 100);
-          if (pct && label) output.push(row(`${providerName} · ${label}`, pct, t, colorForTone(t, percentTone(usageWindow.usedPercent))));
-        }
-      }
-    }
-  }
-  if (Array.isArray(status.extensionStatuses)) {
-    for (const extensionStatus of status.extensionStatuses.slice(0, 24)) {
-      const text = safeText(extensionStatus, 300);
-      if (text) output.push(row("Integration", text, t));
-    }
-  }
-  return output;
 }
 
 function agentItems(snapshot) {
@@ -565,7 +523,6 @@ export default class GentleHerdrSidebar extends View {
       },
     });
     const sections = snapshot ? [
-      section("Status", snapshot.status.agentState ? stateLabel(snapshot.status.agentState) : "", t, { ...sectionOptions("status"), children: () => statusRows(snapshot, t) }),
       section("Agents & Jobs", jobs?.length ? `${jobs.length} running` : "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(snapshot, t, target, true, liveAgents) }),
       section("TODO", todoSummary(snapshot), t, {
         ...sectionOptions("todo"),
@@ -576,9 +533,6 @@ export default class GentleHerdrSidebar extends View {
         )],
       }),
     ] : [
-      section("Status", this.loading ? "Loading" : "Bridge unavailable", t, { ...sectionOptions("status"), children: () => [
-        div().text_size(12).text_color(t.muted).child(this.error ?? "No recent bridge snapshot for this pane"),
-      ] }),
       section("Agents & Jobs", "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(null, t, target, true, liveAgents) }),
       section("TODO", "TODO unavailable", t, { ...sectionOptions("todo"), children: () => [
         div().text_size(12).text_color(t.dim).child("No recent bridge snapshot"),
