@@ -381,9 +381,15 @@ export class Spaces {
       if (mine.length) return [head, ...metrics, ...mine.map(draw)];
       const placeholder = this.machineLoading(m)
         ? this.loadingRow(m, t, collapsed)
-        : this.newSpaceRow(m, t, collapsed);
-      return [head, ...metrics, placeholder];
+        : this.machineConnected(m)
+          ? this.newSpaceRow(m, t, collapsed)
+          : null;
+      return [head, ...metrics, ...(placeholder ? [placeholder] : [])];
     });
+  }
+
+  machineConnected(m) {
+    return !m || this.machines.some((machine) => machine.name === m && machine.state === "connected");
   }
 
   machineLoading(m) {
@@ -425,7 +431,7 @@ export class Spaces {
 
   machineHeader(m, t, collapsed) {
     const machine = this.machines.find((k) => k.name === m);
-    const connected = !m || machine?.state === "connected";
+    const connected = this.machineConnected(m);
     const head = h_flex()
       .id(`machine-${m ?? "local"}`)
       .h(26)

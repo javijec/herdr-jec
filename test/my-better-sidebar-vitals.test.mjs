@@ -119,3 +119,20 @@ test("removing a disconnected machine clears its metrics and platform cache", as
   assert.equal(h.vitals.platforms["remote:winbox"], undefined);
   assert.equal(h.vitals.targets.map((machine) => machine.id).join(","), "local");
 });
+
+test("space creation is allowed only on the local or connected machine", async () => {
+  const spacesSource = readFileSync(
+    fileURLToPath(new URL("../mods/my-better-sidebar/views/spaces.js", import.meta.url)),
+    "utf8",
+  )
+    .replace(/^import\s+[\s\S]*?;\n/gm, "")
+    .replace("export class Spaces", "globalThis.Spaces = class Spaces");
+  const context = vm.createContext({ Object, Set, Map, Array, String, Number, JSON, Math, Date });
+  vm.runInContext(spacesSource, context);
+  const spaces = Object.create(context.Spaces.prototype);
+  spaces.machines = [{ name: "online", state: "connected" }, { name: "offline", state: "disconnected" }];
+
+  assert.equal(spaces.machineConnected(null), true);
+  assert.equal(spaces.machineConnected("online"), true);
+  assert.equal(spaces.machineConnected("offline"), false);
+});
