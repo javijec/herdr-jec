@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -29,4 +29,16 @@ test("todo parsing validates entries and job events are scoped to their session"
 test("missing Agent history is reported unavailable, never as live progress", async () => {
   const result = await readAgentHistory(path.join(os.tmpdir(), `missing-gentle-agent-history-${process.pid}-${Date.now()}`), "session");
   assert.deepEqual(result, { items: [], liveAvailable: false, historyAvailable: false });
+});
+
+test("finished Agent tasks remain visible for five minutes, then expire", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "gentle-agent-history-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const now = 1_000_000;
+  await writeFile(path.join(dir, "task-1.json"), JSON.stringify({ task: {
+    id: "task-1", parentSessionId: "session", status: "completed", agent: "worker", label: "Inspect sidebar",
+    startedAt: now - 130_000, endedAt: now - 120_000, createdAt: now - 130_000, tokens: 10, cost: 0.01,
+  } }));
+  assert.equal((await readAgentHistory(dir, "session", now)).items[0]?.id, "task-1");
+  assert.deepEqual((await readAgentHistory(dir, "session", now + 181_000)).items, []);
 });

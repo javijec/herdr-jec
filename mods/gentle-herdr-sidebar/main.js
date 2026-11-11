@@ -303,31 +303,20 @@ function agentDetails(snapshot, t, target, compact = false, liveAgents = []) {
   const items = agentItems(snapshot);
   const liveTasks = normalizeGentleAgentTasks(agents?.liveTasks);
   const output = [];
-  if (agents?.liveAvailable === true) {
-    if (liveTasks.length === 0) output.push(div().text_size(12).text_color(t.dim).child("No live Gentle Agents tasks reported"));
-    for (const task of liveTasks.slice(0, compact ? 1 : 20)) {
-      output.push(h_flex().min_h(22).gap(7).items_center()
-        .child(div().flex_1().min_w(0).truncate().text_size(12).child(task.label ?? `Task ${task.id}`))
-        .child(div().flex_none().text_size(11).text_color(statusColor(t, task.status)).child(stateLabel(task.status) ?? "Unknown")));
-    }
-  }
-  if (liveAgents.length === 0) output.push(div().text_size(12).text_color(t.dim).child("No Herdr agents in this tab"));
   for (const item of liveAgents.slice(0, compact ? 1 : 100)) {
     output.push(h_flex().min_h(22).gap(7).items_center()
       .child(div().w(13).flex_none().text_color(statusColor(t, item.status)).child("●"))
       .child(div().flex_1().min_w(0).truncate().text_size(12).font_semibold().child(item.name))
       .child(div().flex_none().text_size(11).text_color(statusColor(t, item.status)).child(stateLabel(item.status) ?? "Unknown"))
-      .when(Boolean(item.app), (element) => element.child(div().flex_none().text_size(10).text_color(t.dim).child(item.app))));
+      .when(Boolean(item.app) && item.app.toLowerCase() !== item.name.toLowerCase(), (element) => element.child(div().flex_none().text_size(10).text_color(t.dim).child(item.app))));
   }
-  if (!isRecord(agents) || !items) {
-    output.push(div().pt(5).text_size(12).text_color(t.dim).child("Recent Gentle Agents task history unavailable"));
-    return output;
+  for (const task of liveTasks.slice(0, compact ? 1 : 20)) {
+    output.push(h_flex().min_h(22).gap(7).items_center()
+      .child(div().flex_1().min_w(0).truncate().text_size(12).child(task.label ?? `Task ${task.id}`))
+      .child(div().flex_none().text_size(11).text_color(statusColor(t, task.status)).child(stateLabel(task.status) ?? "Unknown")));
   }
+  if (!isRecord(agents) || !items) return output;
   if (agents.historyPartial === true) output.push(div().text_size(11).text_color(t.ansi3 ?? t.working).child("Recent task history is partial"));
-  if (!items.length) {
-    output.push(div().text_size(12).text_color(t.dim).child(agents.historyAvailable === true ? "No recent finished tasks" : "Recent task history unavailable"));
-    return output;
-  }
   for (const item of items.slice(0, compact ? 1 : 3)) {
     const agent = safeText(item.agent, 100) ?? "Agent";
     const label = safeText(item.label, 300) ?? "Finished task";

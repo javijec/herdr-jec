@@ -9,7 +9,7 @@ const SAFE_TASK_ID = /^[a-z0-9_-]{1,128}$/i;
 // Read one bounded private history file at a time; threads can approach their configured item/output limits.
 const HISTORY_MAX_BYTES = 16 * 1024 * 1024;
 const MAX_HISTORY_FILES = 200;
-const FINISHED_TTL_MS = 60_000;
+const FINISHED_TTL_MS = 5 * 60_000;
 const VISIBLE_FINISHED_LIMIT = 3;
 
 function record(value) {
