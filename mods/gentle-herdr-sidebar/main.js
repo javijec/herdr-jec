@@ -315,6 +315,8 @@ function agentDetails(snapshot, t, target, compact = false, liveAgents = []) {
       .child(div().flex_1().min_w(0).truncate().text_size(12).child(task.label ?? `Task ${task.id}`))
       .child(div().flex_none().text_size(11).text_color(statusColor(t, task.status)).child(stateLabel(task.status) ?? "Unknown")));
   }
+  const jobs = jobItems(snapshot);
+  if (jobs?.length) output.push(...jobDetails(snapshot, t, jobs));
   if (!isRecord(agents) || !items) return output;
   if (agents.historyPartial === true) output.push(div().text_size(11).text_color(t.ansi3 ?? t.working).child("Recent task history is partial"));
   for (const item of items.slice(0, compact ? 1 : 3)) {
@@ -374,7 +376,7 @@ function todoDetails(snapshot, t, expanded = false) {
 }
 
 function jobItems(snapshot) {
-  return runningJobs(snapshot.status.jobs)?.slice(0, 100);
+  return isRecord(snapshot?.status) ? runningJobs(snapshot.status.jobs)?.slice(0, 100) : undefined;
 }
 
 function jobDetails(snapshot, t, jobs = jobItems(snapshot)) {
@@ -547,7 +549,7 @@ export default class GentleHerdrSidebar extends View {
     const snapshot = this.snapshot;
 
     if (this.panel) {
-      const title = "Agents";
+      const title = "Agents & Jobs";
       const overlayId = props()?.overlay;
       return v_flex().id(`gentle-herdr-${this.panel}-overlay`).size_full().min_h(0).rounded(10).overflow_hidden()
         .bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13)
@@ -575,7 +577,7 @@ export default class GentleHerdrSidebar extends View {
     });
     const sections = snapshot ? [
       section("Status", snapshot.status.agentState ? stateLabel(snapshot.status.agentState) : "", t, { ...sectionOptions("status"), children: () => statusRows(snapshot, t) }),
-      section("Agents", "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(snapshot, t, target, true, liveAgents) }),
+      section("Agents & Jobs", jobs?.length ? `${jobs.length} running` : "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(snapshot, t, target, true, liveAgents) }),
       section("TODO", todoSummary(snapshot), t, {
         ...sectionOptions("todo"),
         onTitleClick: () => { this.todoExpanded = !this.todoExpanded; cx.notify(); },
@@ -584,12 +586,11 @@ export default class GentleHerdrSidebar extends View {
           todoDetails(snapshot, t, this.todoExpanded),
         )],
       }),
-      ...(jobs?.length ? [section("Jobs", `${jobs.length} running`, t, { ...sectionOptions("jobs"), children: () => jobDetails(snapshot, t, jobs) })] : []),
     ] : [
       section("Status", this.loading ? "Loading" : "Bridge unavailable", t, { ...sectionOptions("status"), children: () => [
         div().text_size(12).text_color(t.muted).child(this.error ?? "No recent bridge snapshot for this pane"),
       ] }),
-      section("Agents", "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(null, t, target, true, liveAgents) }),
+      section("Agents & Jobs", "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(null, t, target, true, liveAgents) }),
       section("TODO", "TODO unavailable", t, { ...sectionOptions("todo"), children: () => [
         div().text_size(12).text_color(t.dim).child("No recent bridge snapshot"),
       ] }),
