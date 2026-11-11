@@ -57,6 +57,10 @@ export function retainHerdrAgentSnapshot(previous, value, scope) {
   return normalizeHerdrAgents(value, scope);
 }
 
+export function agentProgressNotice() {
+  return "The live Gentle Agents task progress is unavailable.";
+}
+
 export function normalizeHerdrAgents(value, scope) {
   if (!Array.isArray(value) || !isRecord(scope) || typeof scope.space !== "string" || typeof scope.tab !== "string") return [];
   const allowedStates = new Set(["working", "blocked", "done", "idle"]);

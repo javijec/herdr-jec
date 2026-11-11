@@ -20,7 +20,7 @@ test("agent projection is tab-scoped and clearly disclaims live Gentle Agents pr
     { space: "s", tab: "t", status: "working", program: { name: "Pi" } },
     { space: "s", tab: "other", status: "working", program: { name: "Other" } },
   ], { space: "s", tab: "t" }), [{ name: "Pi", status: "working" }]);
-  assert.match(agentProgressNotice(), /live Gentle Agents task progress is unavailable/);
+  assert.equal(agentProgressNotice(), "The live Gentle Agents task progress is unavailable.");
 });
 
 test("directory identity preserves POSIX case and normalizes Windows paths", () => {
