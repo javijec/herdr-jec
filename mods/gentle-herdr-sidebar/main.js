@@ -297,7 +297,7 @@ function todoSummary(snapshot) {
   return `${complete} of ${todos.length}`;
 }
 
-function todoDetails(snapshot, t, expanded = false) {
+function todoDetails(snapshot, t, expanded = false, expandedItems = new Set(), onToggleTodo = () => {}) {
   const todos = snapshot.status.todos;
   const items = todoItems(snapshot);
   if (!isRecord(todos) || !items) return [div().text_size(12).text_color(t.muted).child("TODO data unavailable")];
@@ -309,12 +309,16 @@ function todoDetails(snapshot, t, expanded = false) {
     const state = safeText(item.state, 32);
     const note = safeText(item.note, 600);
     if (!title || !state) continue;
+    const todoKey = `${items.indexOf(item)}:${title}`;
+    const itemExpanded = expandedItems.has(todoKey);
     output.push(v_flex().gap(2).py(3).border_b(1).border_color(t.border)
       .child(h_flex().min_h(22).gap(7).items_center()
         .child(div().w(13).flex_none().text_size(11).text_color(statusColor(t, state)).child(state === "done" ? "✓" : state === "in_progress" ? "●" : "○"))
-        .child(div().flex_1().min_w(0).truncate().text_size(12).child(title))
-        .child(div().flex_none().text_size(10).text_color(t.muted).child(state.replace("_", " "))))
-      .when(Boolean(note), (element) => element.child(div().px(4).text_size(11).text_color(t.dim).child(note))));
+        .child(div().flex_1().min_w(0).when(!itemExpanded, (element) => element.truncate()).text_size(12).child(title))
+        .child(div().flex_none().text_size(10).text_color(t.muted).child(state.replace("_", " ")))
+        .child(div().w(14).flex_none().cursor_pointer().text_size(12).text_color(t.muted).text_center()
+          .on_click(() => onToggleTodo(todoKey)).child(itemExpanded ? "⌄" : ">")))
+      .when(itemExpanded && Boolean(note), (element) => element.child(div().px(4).text_size(11).text_color(t.dim).child(note))));
   }
   if (expanded && items.length > visible.length) output.push(div().text_size(11).text_color(t.dim).child(`… ${items.length - visible.length} more`));
   if (items.length === 0) output.push(div().text_size(12).text_color(t.dim).child("No TODO items"));
@@ -373,6 +377,7 @@ export default class GentleHerdrSidebar extends View {
     this.error = null;
     this.loading = false;
     this.todoExpanded = true;
+    this.expandedTodos = new Set();
     this.collapsedSections = new Set();
     this.liveAgents = [];
     this.refresh(cx);
@@ -459,6 +464,7 @@ export default class GentleHerdrSidebar extends View {
       this.error = null;
       this.loading = false;
       this.todoExpanded = true;
+      this.expandedTodos = new Set();
       this.collapsedSections = new Set();
       this.requestId += 1;
     }
@@ -522,6 +528,13 @@ export default class GentleHerdrSidebar extends View {
         cx.notify();
       },
     });
+    const toggleTodo = (todoKey) => {
+      const expanded = new Set(this.expandedTodos);
+      if (expanded.has(todoKey)) expanded.delete(todoKey);
+      else expanded.add(todoKey);
+      this.expandedTodos = expanded;
+      cx.notify();
+    };
     const sections = snapshot ? [
       section("Agents & Jobs", jobs?.length ? `${jobs.length} running` : "", t, { ...sectionOptions("agents"), onTitleClick: () => this.openPanel("agents"), children: () => agentDetails(snapshot, t, target, true, liveAgents) }),
       section("TODO", todoSummary(snapshot), t, {
@@ -529,7 +542,7 @@ export default class GentleHerdrSidebar extends View {
         onTitleClick: () => { this.todoExpanded = !this.todoExpanded; cx.notify(); },
         fillAvailable: true,
         children: () => [v_flex().flex_1().min_h(0).overflow_y_scrollbar().children(
-          todoDetails(snapshot, t, this.todoExpanded),
+          todoDetails(snapshot, t, this.todoExpanded, this.expandedTodos, toggleTodo),
         )],
       }),
     ] : [

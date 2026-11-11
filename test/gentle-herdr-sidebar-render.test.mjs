@@ -23,6 +23,16 @@ test("fill-available sections give their child container a constrained flex heig
   assert.match(section, /if \(fillAvailable\) container\.flex_1\(\)\.min_h\(0\)/);
 });
 
+test("TODO rows have per-item disclosure controls that reveal their notes", () => {
+  const start = source.indexOf("function todoDetails(");
+  const end = source.indexOf("function jobItems(", start);
+  const todoDetails = source.slice(start, end);
+  assert.match(todoDetails, /expandedItems\.has\(todoKey\)/);
+  assert.match(todoDetails, /onToggleTodo\(todoKey\)/);
+  assert.match(todoDetails, /itemExpanded \? "⌄" : ">"/);
+  assert.match(todoDetails, /\.when\(itemExpanded && Boolean\(note\)/);
+});
+
 test("sidebar omits Status whether a bridge snapshot is present or unavailable", () => {
   assert.doesNotMatch(source, /section\(\"Status\"/);
 });
