@@ -208,7 +208,7 @@ function contextUsageRow(progress, t) {
     .child(div().w(40).flex_none().text_size(12).text_right().text_color(color).child(progress.label));
 }
 
-function section(title, summary, t, { expanded = true, onToggle, onTitleClick, children = () => [] } = {}) {
+function section(title, summary, t, { expanded = true, onToggle, onTitleClick, children = () => [], expandUp = false } = {}) {
   const toggle = () => onToggle?.();
   let titleLabel = div().flex_none().font_semibold().text_color(t.foreground).child(title);
   if (onTitleClick) titleLabel = titleLabel.cursor_pointer().on_click(onTitleClick);
@@ -220,8 +220,10 @@ function section(title, summary, t, { expanded = true, onToggle, onTitleClick, c
     .child(div().min_w(22).min_h(22).flex_none().rounded(4).border_1().border_color(t.border)
       .cursor_pointer().hover((style) => style.bg(t.hover)).text_center().text_color(t.muted).on_click(toggle)
       .child(expanded ? "−" : "+"));
-  const output = v_flex().gap(4).px(10).py(7).border_b(1).border_color(t.border).child(heading);
-  if (expanded) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
+  const output = v_flex().gap(4).px(10).py(7).border_b(1).border_color(t.border);
+  if (expanded && expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
+  output.child(heading);
+  if (expanded && !expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
   return output;
 }
 
@@ -590,7 +592,6 @@ export default class GentleHerdrSidebar extends View {
         )],
       }),
       ...(jobs?.length ? [section("Jobs", `${jobs.length} running`, t, { ...sectionOptions("jobs"), children: () => jobDetails(snapshot, t, jobs) })] : []),
-      ...(isRecord(snapshot.status.stats) ? [section("Stats", moneyText(snapshot.status.stats.cost) ?? "Session totals", t, { ...sectionOptions("stats"), children: () => statsDetails(snapshot, t) })] : []),
     ] : [
       section("Status", this.loading ? "Loading" : "Bridge unavailable", t, { ...sectionOptions("status"), children: () => [
         div().text_size(12).text_color(t.muted).child(this.error ?? "No recent bridge snapshot for this pane"),
@@ -609,7 +610,15 @@ export default class GentleHerdrSidebar extends View {
         .child(div().font_semibold().child("Gentle-Pi"))
         .child(div().text_color(t.ansi5 ?? t.accent).child("✿"))
         .child(div().flex_1()))
-      .child(v_flex().id("gentle-herdr-sidebar-sections").flex_1().min_h(0).overflow_y_scrollbar()
-        .children(sections));
+      .child(v_flex().flex_1().min_h(0)
+        .child(v_flex().id("gentle-herdr-sidebar-sections").flex_1().min_h(0).overflow_y_scrollbar()
+          .children(sections))
+        .when(snapshot && isRecord(snapshot.status.stats), (element) => element.child(
+          section("Stats", moneyText(snapshot.status.stats.cost) ?? "Session totals", t, {
+            ...sectionOptions("stats"),
+            expandUp: true,
+            children: () => statsDetails(snapshot, t),
+          }),
+        )));
   }
 }
