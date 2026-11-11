@@ -208,7 +208,7 @@ function contextUsageRow(progress, t) {
     .child(div().w(40).flex_none().text_size(12).text_right().text_color(color).child(progress.label));
 }
 
-function section(title, summary, t, { expanded = true, onToggle, onTitleClick, children = () => [], expandUp = false } = {}) {
+function section(title, summary, t, { expanded = true, onToggle, onTitleClick, children = () => [], expandUp = false, borderBottom = true } = {}) {
   const toggle = () => onToggle?.();
   let titleLabel = div().flex_none().font_semibold().text_color(t.foreground).child(title);
   if (onTitleClick) titleLabel = titleLabel.cursor_pointer().on_click(onTitleClick);
@@ -220,7 +220,8 @@ function section(title, summary, t, { expanded = true, onToggle, onTitleClick, c
     .child(div().min_w(22).min_h(22).flex_none().rounded(4).border_1().border_color(t.border)
       .cursor_pointer().hover((style) => style.bg(t.hover)).text_center().text_color(t.muted).on_click(toggle)
       .child(expanded ? "−" : "+"));
-  const output = v_flex().flex_none().gap(4).px(10).py(7).border_b(1).border_color(t.border);
+  const output = v_flex().flex_none().gap(4).px(10).py(7);
+  if (borderBottom) output.border_b(1).border_color(t.border);
   if (expanded && expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
   output.child(heading);
   if (expanded && !expandUp) output.child(v_flex().gap(2).children(resolveSectionChildren(expanded, children)));
@@ -587,7 +588,7 @@ export default class GentleHerdrSidebar extends View {
       section("TODO", todoSummary(snapshot), t, {
         ...sectionOptions("todo"),
         onTitleClick: () => { this.todoExpanded = !this.todoExpanded; cx.notify(); },
-        children: () => [v_flex().h(220).flex_none().min_h(0).overflow_y_scrollbar().children(
+        children: () => [v_flex().flex_none().children(
           todoDetails(snapshot, t, this.todoExpanded),
         )],
       }),
@@ -617,6 +618,7 @@ export default class GentleHerdrSidebar extends View {
           section("Stats", moneyText(snapshot.status.stats.cost) ?? "Session totals", t, {
             ...sectionOptions("stats"),
             expandUp: true,
+            borderBottom: false,
             children: () => statsDetails(snapshot, t),
           }),
         )));
