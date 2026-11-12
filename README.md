@@ -1,50 +1,101 @@
-# Herdr layout: Javijec
+# Javijec
 
-This folder is a portable package for the Javijec layout. To install it on another PC, copy these contents into that PC's Herdr app home, preserving the folder structure:
+Javijec is a portable Herdr layout and set of custom mods for working across local and remote machines. It brings machine-aware Spaces and Agents, file and Git tools, GitHub and Linear integrations, and an optional Gentle Shell panel into one workspace. It is a Herdr configuration package, not a replacement for Herdr or Gentle Shell.
 
-On Windows, `install-layout.ps1` automates the layout, mod, and theme copies. It defaults to `%USERPROFILE%\.config\herdr-app` (or `$env:HERDR_APP_HOME` when set):
+![Javijec layout preview](preview.png)
+
+## What’s included
+
+The `javijec` layout combines:
+
+- **Machine-aware sidebar:** Machines, Spaces, and Agents, with CPU and memory vitals. Disconnected machines collapse and hide their Spaces; their Agents are dimmed and cannot be opened. Reconnecting restores the saved fold preference.
+- **Workspace tabs and tools:** Files, Changes, Git Graph, Pull Requests, Linear Issues, and Gentle Shell. Changes is selected by default. The panel can be switched from the toolbar.
+- **Workspace footer:** command shortcut beside Settings, plus workspace/session context, model and effort, agent count, and provider usage limits.
+- **Expandable TODOs:** the Gentle Herdr panel can show recent task history and TODOs; individual tasks expand to reveal their note and full title.
+- **Themes:** `gentle`, `gentleman-cute`, and `gentleman-sexy` are included as optional themes. The layout uses Herdr’s `paper` theme in light mode and `atom-one-dark` in dark mode.
+
+## Included mods
+
+| Mod | Role |
+| --- | --- |
+| `workspace-chrome` | Workspace header and footer controls. |
+| `jec-sidebar` | Machine-aware Machines, Spaces, Agents, and machine vitals. |
+| `jec-tabs` | Workspace tabs and tool-panel buttons. |
+| `jec-files` | File browser and viewer/editor. |
+| `jec-changes` | Git changes, staging, commit actions, and pane header. |
+| `better-git-graph` | Git history and branch graph. |
+| `jec-branch-pr` | GitHub pull-request browsing and actions. |
+| `jec-branch-issue` | Linear issues and issue worktrees. |
+| `workspace-status` | Workspace and model/context information in the footer. |
+| `jec-usage-limits` | Provider usage windows. |
+| `gentle-herdr-sidebar` | Optional Gentle Shell snapshots, changes, TODOs, and limited task history. |
+
+The layout and mods are under `layouts/` and `mods/`; optional themes are under `themes/`.
+
+## Install
+
+You need Herdr installed. On Windows, use the included PowerShell installer from the repository root:
 
 ```powershell
 .\install-layout.ps1 -WhatIf
 .\install-layout.ps1
 ```
 
-Different existing files are skipped by default. Use `-ReplaceExisting` only when you want the script to back them up under `.herdr-layout-backups` and replace them. Add `-Activate` to switch Herdr to `javijec` after a conflict-free install. The script does not install or enable the Gentle Herdr bridge extension; configure that separately if needed. Use `-HerdrAppHome <path>` to select another app home.
+The installer defaults to `%USERPROFILE%\.config\herdr-app`, or `$env:HERDR_APP_HOME` when set. `-HerdrAppHome <path>` selects another app home. Existing files that differ are left untouched by default. Use `-ReplaceExisting` only if you want the installer to back them up under `.herdr-layout-backups` and replace them. Add `-Activate` to switch to Javijec after a conflict-free install.
 
-The equivalent manual copy destinations are:
+On macOS or Linux, or if you prefer to install manually, copy while preserving the directory structure:
 
-- `layouts/javijec.json` → `<HERDR_APP_HOME>/layouts/javijec.json`
-- `mods/*` → `<HERDR_APP_HOME>/mods/`
-- `themes/*` → `<HERDR_APP_HOME>/themes/`
-- `extensions/gentle-herdr-bridge.mjs` and `bridge/*` → keep together in this package and load the extension from your Pi/Gentle Shell setup
-- `RECIPE.md` and `preview.png` are the layout's share-page description and preview.
+- `layouts/javijec.json` to `<HERDR_APP_HOME>/layouts/`
+- `mods/*` to `<HERDR_APP_HOME>/mods/`
+- `themes/*` to `<HERDR_APP_HOME>/themes/`
 
-Do not replace existing files with the same names without checking them first. After copying, run `herdr-app check mods/<name>` for each included mod, then switch with:
+Do not overwrite same-named custom mods without comparing them first. Check the installed mods and activate the layout with Herdr’s CLI:
 
-```powershell
+```sh
+herdr-app check mods/<mod-name>
 herdr-app do layout.switch '{"name":"javijec"}'
 ```
 
-The PR and Linear panels require their respective local CLI/helper and authentication. The optional Gentle Shell panel also needs the separate Pi bridge extension enabled; it is a read-only projection and does not provide live Gentle Agents task progress or 1:1 parity. See [RECIPE.md](RECIPE.md) for integrations and limitations.
+Run `herdr-app check` for each installed mod. The layout uses Herdr’s normal layout switching; this package does not install global Herdr settings, personal shared state, or workstation-specific key bindings.
 
-The Gentle Shell selector is included in `layouts/javijec.json`. The Herdr mod lives at `mods/gentle-herdr-sidebar/`; its bridge is `extensions/gentle-herdr-bridge.mjs` with data helpers under `bridge/`. This package does not install or enable the extension automatically and does not edit user-level Herdr or Gentle Shell configuration.
+## Optional Gentle Shell panel
 
-Run the deterministic package checks with `npm test`. The bridge can be loaded from Pi through the package's `pi.extensions` declaration.
+The Gentle Shell panel is separate from Herdr’s terminal panes. It reads bounded snapshots published by the Pi extension at `extensions/gentle-herdr-bridge.mjs`; by default they are stored under `~/.gentle-herdr`, or under `GENTLE_HERDR_DIR` if configured.
 
-Before publishing this package publicly, review or replace `preview.png`: it is a live screenshot and may show current workspace names or terminal content.
+The layout installer does **not** install or enable the extension. Keep `extensions/gentle-herdr-bridge.mjs` together with `bridge/`, then load it through Gentle Shell/Pi’s normal extension workflow. The package declares the extension in `package.json` under `pi.extensions`.
 
-## Check original Estro for updates
+This panel is a limited snapshot view, not live Gentle Agents progress or a one-to-one copy of Gentle Shell’s Agents rail. Missing, stale, malformed, or out-of-scope snapshots remain unavailable rather than being guessed.
 
-The original Estro repo keeps mod pointers under `estro/`; the mod source folders are at the repository root. `check-estro-updates.ps1` compares the saved upstream commit in `upstream-estro.json` with GitHub's current `main`, then prints patches for `estro/` and the original mods Estro depends on. It uses the public GitHub API and needs no Git clone or credentials.
+## Integrations and requirements
 
-```powershell
-pwsh -File .\check-estro-updates.ps1
+- **Git tools:** Git and a valid repository are needed for repository-dependent panels and actions. Some worktree operations fetch remote refs.
+- **GitHub Pull Requests:** requires the GitHub CLI (`gh`) installed and authenticated. Some actions write to GitHub.
+- **Linear Issues:** requires `LINEAR_API_KEY` and the bundled Windows helper. Other platforms need a compatible helper build. Linear requests use the network.
+- **Usage limits:** depend on the provider applications and local usage data available on that machine; some provider data may be unavailable.
+
+Mods are trusted code, not sandboxed extensions. Review them before installing or changing them.
+
+## Development checks
+
+Run the repository test suite from the project root:
+
+```sh
+npm test
 ```
 
-Review the diff before accepting it. Only then advance the checkpoint:
+For a mod-specific host/API check, run:
 
-```powershell
-pwsh -File .\check-estro-updates.ps1 -AdvanceBaseline
+```sh
+herdr-app check mods/<mod-name>
 ```
 
-This watches the original upstream mods, not the customized copies in this package. The original Estro recipe's module list is recorded in `upstream-estro.json`; update that list if the upstream layout adds or removes modules.
+The Linear helper is a separate Go module. Its tests, when working on that helper, run from its directory:
+
+```sh
+cd mods/jec-branch-issue/helper
+go test ./...
+```
+
+## Share-page materials
+
+`RECIPE.md` and `preview.png` are also used as the layout’s share-page description and preview. Before publishing the package publicly, review `preview.png` for workspace names or terminal content that should not be shared.
