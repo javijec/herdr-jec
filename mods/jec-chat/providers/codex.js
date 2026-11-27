@@ -94,3 +94,48 @@ export async function registeredSession(cwd, address) {
     return { pending: true, id: entry.id };
   }
 }
+
+// Keep the interactive path separate from discovery. A manually picked
+// transcript is never sufficient authority to send into a live terminal.
+export function terminalStatus(record) {
+  return typeof record?.status === "string" ? record.status
+    : record?.status?.state ?? record?.report?.state ?? null;
+}
+export function validatePrompt(text) {
+  if (typeof text !== "string" || !text.trim()) throw new Error("Escribí un mensaje.");
+  if (text.length > 16000) throw new Error("El mensaje supera los 16 000 caracteres.");
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/.test(text))
+    throw new Error("El mensaje contiene caracteres de control no permitidos.");
+  if (/^\s*[\/!]/.test(text))
+    throw new Error("Usá Terminal para comandos de Codex o del shell.");
+  return text.replace(/\r\n?/g, "\n");
+}
+export async function sendPrompt(target, session, text, stillCurrent = () => true) {
+  const prompt = validatePrompt(text);
+  if (target?.machine || !target?.isCodex || !/^t[0-9a-z]+$/i.test(target?.terminal ?? "")
+      || !session?.id || !session?.file) throw new Error("La sesión no está vinculada a una terminal local.");
+  const info = await hc(["get", target.terminal, "--json"]);
+  if (info.code !== 0) throw new Error("No se pudo verificar la terminal.");
+  const response = JSON.parse(info.stdout);
+  const record = response.terminal ?? response.record ?? response;
+  const entry = registration(record.labels);
+  if (record.state !== "live" || (record.address && record.address !== target.terminal)
+      || !entry || entry.id !== session.id.toLowerCase() || entry.file !== session.file)
+    throw new Error("La sesión cambió. Actualizá el chat antes de enviar.");
+  if (terminalStatus(record) !== "idle")
+    throw new Error("Codex no está listo. Esperá o revisá Terminal.");
+  if (!stillCurrent()) throw new Error("Cambió el panel activo. No se envió el mensaje.");
+  // The core rechecks idle at delivery; do not use --force or retry on error.
+  // End options before the terminal and the user's literal text.
+  const result = await hc(["send", "--if", "idle", "--json", "--", target.terminal, prompt]);
+  if (result.code !== 0) {
+    throw new Error("Herdr no confirmó el envío. Revisá Terminal antes de volver a intentarlo.");
+  }
+  let data;
+  try { data = JSON.parse(result.stdout); } catch {
+    throw new Error("No se pudo confirmar el envío. Revisá Terminal antes de volver a intentarlo.");
+  }
+  if (data?.error || data?.ok === false || data?.sent === false)
+    throw new Error("Herdr no confirmó el envío. Revisá Terminal antes de volver a intentarlo.");
+  return data;
+}
