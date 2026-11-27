@@ -21,6 +21,7 @@ jobs:
           node --check mods/jec-chat/main.js
           node --check mods/jec-chat/session.js
           node --check mods/jec-chat/providers/codex.js
+          node --check mods/jec-chat/providers/match.js
           node --check mods/jec-pane/main.js
       - name: Validate layout and mod metadata
         run: node -e "const f=require('fs');for(const p of ['layouts/jec-chat.json','mods/jec-chat/mod.json','mods/jec-pane/mod.json']) JSON.parse(f.readFileSync(p,'utf8'))"
