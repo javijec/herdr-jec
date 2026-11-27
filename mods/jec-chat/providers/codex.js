@@ -75,7 +75,7 @@ export function registration(labels) {
   } catch { return null; }
 }
 export async function registeredSession(cwd, address) {
-  let entry;
+  let entry, status;
   try {
     const result = await hc(["get", address, "--json"]);
     if (result.code !== 0) return null;
@@ -83,23 +83,25 @@ export async function registeredSession(cwd, address) {
     const record = info.terminal ?? info.record ?? info;
     if (record.state && record.state !== "live") return null;
     entry = registration(record.labels);
+    status = terminalStatus(record);
   } catch { return null; }
   if (!entry) return null;
-  if (!entry.file) return { pending: true, id: entry.id };
+  if (!entry.file) return { pending: true, id: entry.id, status };
   try {
     const data = await readSession(cwd, entry.file, entry.id);
-    return { session: { id: entry.id, file: entry.file, cwd: entry.cwd }, data, method: "registro Codex" };
+    return { session: { id: entry.id, file: entry.file, cwd: entry.cwd }, data, status, method: "registro Codex" };
   } catch {
     // Path may not yet exist; never silently attach a different thread.
-    return { pending: true, id: entry.id };
+    return { pending: true, id: entry.id, status };
   }
 }
 
 // Keep the interactive path separate from discovery. A manually picked
 // transcript is never sufficient authority to send into a live terminal.
 export function terminalStatus(record) {
-  return typeof record?.status === "string" ? record.status
-    : record?.status?.state ?? record?.report?.state ?? null;
+  // The core's report is authoritative, unlike the UI's derived unread/done state.
+  const state = record?.report?.state ?? (typeof record?.status === "string" ? record.status : record?.status?.state);
+  return typeof state === "string" ? state.toLowerCase() : null;
 }
 export function validatePrompt(text) {
   if (typeof text !== "string" || !text.trim()) throw new Error("Escribí un mensaje.");
@@ -122,14 +124,21 @@ export async function sendPrompt(target, session, text, stillCurrent = () => tru
   if (record.state !== "live" || (record.address && record.address !== target.terminal)
       || !entry || entry.id !== session.id.toLowerCase() || entry.file !== session.file)
     throw new Error("La sesión cambió. Actualizá el chat antes de enviar.");
-  if (terminalStatus(record) !== "idle")
-    throw new Error("Codex no está listo. Esperá o revisá Terminal.");
+  const status = terminalStatus(record);
+  if (status !== "idle")
+    throw new Error("Codex no está listo. Estado del core: " + (status ?? "sin estado") + ". Esperá o revisá Terminal.");
   if (!stillCurrent()) throw new Error("Cambió el panel activo. No se envió el mensaje.");
   // The core rechecks idle at delivery; do not use --force or retry on error.
   // End options before the terminal and the user's literal text.
   const result = await hc(["send", "--if", "idle", "--json", "--", target.terminal, prompt]);
   if (result.code !== 0) {
-    throw new Error("Herdr no confirmó el envío. Revisá Terminal antes de volver a intentarlo.");
+    const raw = String(result.stderr || result.stdout || "");
+    const unsupported = /unexpected argument|unknown (?:argument|option)|unrecognized option|invalid option/i.test(raw) && /--if/.test(raw);
+    if (unsupported) throw new Error("Tu versión de hc no admite --if idle. Ejecutá hc send --help para comprobarlo. No se envió el mensaje.");
+    // Avoid echoing CLI arguments (which can include the user's prompt).
+    let kind = null;
+    try { const error = JSON.parse(raw).error; kind = typeof error?.kind === "string" && /^[a-z_]+$/.test(error.kind) ? error.kind : null; } catch {}
+    throw new Error("Herdr no confirmó el envío (código " + result.code + (kind ? ", " + kind : "") + "). Revisá Terminal antes de volver a intentarlo.");
   }
   let data;
   try { data = JSON.parse(result.stdout); } catch {
