@@ -24,3 +24,7 @@ This branch now contains the unified JEC mod source at `mods/jec-chat`, installe
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -HerdrApp 'C:\path\to\herdr-app.exe'
 ```
 Select the new layout from the patched application. Test two simultaneous split chats, terminal/chat toggle, tab/space switching, zoom, send, close, and native focus/keyboard routing. Roll back by selecting the stable layout in the original binary.
+
+## v0.12.2 official pane baseline
+
+The experimental layout derives from the official main layout, and the shared header derives from the official pane mod. See `native/upstream/README.md`. The native patch is unchanged; no additional Rust changes are required for this refactor.

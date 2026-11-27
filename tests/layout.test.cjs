@@ -41,14 +41,15 @@ test("two splits use exact per-pane identity, not focused terminal or cwd",async
  assert.equal(resolvePaneBody(p2,panes,[{...spaces[0],machine:"remote"}],[]),null);
 });
 test("one mod owns header/body roles and native pane commands, no stack switching",()=>{
- const chat=read("mods/jec-chat/main.js"), header=read("mods/jec-chat/pane-header.js");
+ const chat=read("mods/jec-chat/main.js"), header=read("mods/jec-chat/pane-header.js"), toggle=read("mods/jec-chat/chat-toggle.js");
  assert.match(chat,/this\.headerRole = p\.paneHeader === true/);
  assert.match(chat,/this\.embedded = p\.paneBody === true/);
  assert.match(chat,/if \(this\.headerRole\) return this\.paneHeader\.render\(cx\)/);
  assert.match(chat,/\.when\(!this\.embedded, el => el\.child\(this\.header\(t,target\)\)\)/);
  assert.match(chat,/run\("pane\.view",\{pane:live\.pane\}\)/);
- assert.match(header,/run\("pane\.view",args\)/);
- assert.doesNotMatch(chat+header,/layout\.select|setShared|restoreChat/);
+ assert.match(toggle,/run\("pane\.view",args\)/);
+ assert.match(header,/\.when\(showChatToggle\(p\)/);
+ assert.doesNotMatch(chat+header+toggle,/layout\.select|setShared|restoreChat/);
  assert.match(chat,/this\.isVisible\(\) && samePaneTarget\(this\.liveTarget\(\),target\)/);
 });
 test("installer is opt-in and leaves stable mod names untouched",()=>{
@@ -56,4 +57,13 @@ test("installer is opt-in and leaves stable mod names untouched",()=>{
  assert.match(s,/pane\\\.view/);assert.match(s,/mods\/jec-chat-native/);
  assert.match(s,/layouts\/jec-chat-native\.json/);
  assert.doesNotMatch(s,/install-hooks|SkipCodexHooks/);
+});
+
+test("official pane and main layout are the reproducible base; only JEC extension differs",()=>{
+ const {deriveHeader,deriveLayout}=require("../scripts/sync-upstream-pane.cjs");
+ assert.equal(read("mods/jec-chat/pane-header.js"),deriveHeader(read("native/upstream/pane.js")));
+ assert.equal(read("layouts/jec-chat-native.json"),deriveLayout(read("native/upstream/main.json")));
+ const stock=JSON.parse(read("native/upstream/main.json")), custom=JSON.parse(read("layouts/jec-chat-native.json"));
+ find(custom,"main").content.pane.header.content={mod:"pane"};
+ assert.deepEqual(custom,stock);
 });

@@ -1,8 +1,15 @@
+// Based on herdrdev/herdr-app defaults/mods/pane/main.js @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa
+// Modified for JEC: header role and one Chat/Terminal action. See native/upstream/LICENSE.
+// A pane's header, for layouts that frame their panes:
+//   { "tab": "active", "pane": { "header": { "content": { "mod": "pane" } } } }
+// Shows the program's icon (the app's program table), the agent's name or
+// the terminal's title, the folder, and the agent's status; buttons split, zoom and close
+// this pane. Props from the app: { pane, terminal }. Click: focus the pane.
+
 import { div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { panes, props, run, theme, home, layout, spaces } from "herdr";
-import { detectAgent, supportsChat } from "./provider-catalog.js";
-import { NATIVE_MOD, toggleArgs } from "./native-pane.js";
+import { panes, props, run, theme, home, layout } from "herdr";
+import { showChatToggle, chatToggle } from "./chat-toggle.js";
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -25,23 +32,15 @@ function icon(p, size, color) {
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
 }
 
-function chatAvailable(p) {
-  const space = spaces().find(s => s.tabs?.some(tab => tab.id === p?.tab));
-  return Boolean(space && supportsChat({
-    terminal: p?.terminal, cwd: p?.cwd, machine: space.machine,
-    providerId: detectAgent(p?.program, p?.app)
-  }));
-}
-
 function folder(cwd) {
   if (!cwd) return "";
   const h = home();
   return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
 }
 
-// The same installed mod has a header copy and (optionally) a body copy per pane.
 export class PaneHeader {
-  constructor() { this.hovered=false; }
+  constructor() { this.hovered = false; }
+
   me() {
     return panes().find((p) => p.pane === props()?.pane);
   }
@@ -58,21 +57,6 @@ export class PaneHeader {
         run(command, args);
       })
       .child(svg(`mods/pane/${icon}.svg`).size(14));
-  }
-
-  chatButton(t, p) {
-    return div().id("jec-chat-toggle-" + p.pane).h(23).px(9)
-      .rounded(5).border_1().border_color(t.border).bg(t.raised)
-      .text_size(11).font_semibold().text_color(t.foreground)
-      .flex().items_center().cursor_pointer()
-      .hover(el => el.bg(t.hover))
-      .on_click((_e, cx) => {
-        cx.stop_propagation();
-        const live=this.me();
-        if (live?.pane!==p.pane || live?.terminal!==p.terminal) return;
-        const args=toggleArgs(live);
-        if (args && (live.body_mod===NATIVE_MOD || chatAvailable(live))) run("pane.view",args);
-      }).child(p.body_mod===NATIVE_MOD?"Terminal":"Chat");
   }
 
   render(cx) {
@@ -103,7 +87,7 @@ export class PaneHeader {
       .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
       .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(t.blocked + "26").text_size(10.5).font_semibold().text_color(t.blocked).child("Needs you")))
       .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(t.done)))
-      .when(Boolean(toggleArgs(p)) && (p.body_mod===NATIVE_MOD || chatAvailable(p)), el => el.child(this.chatButton(t, p)))
+      .when(showChatToggle(p), el => el.child(chatToggle(t, p)))
       .when(this.hovered, el => el
         .child(this.button(t, `ph-r-${pane}`, "split-right", "pane.split", { direction: "right", pane }))
         .child(this.button(t, `ph-d-${pane}`, "split-down", "pane.split", { direction: "down", pane }))
