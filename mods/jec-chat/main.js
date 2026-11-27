@@ -52,6 +52,7 @@ export default class JecChat extends View {
     this.matchMethod = null; this.previousView = this.embedded ? activeView(layout()) : null;
     this.manual = false; this.stale = false; this.more = false;
     this.registered = false; this.pendingRegistration = null;
+    this.coreStatus = null;
     this.scroll = ScrollHandle.new();
     this.composer = TextareaState.new({ placeholder: "Escribí un mensaje a Codex…", rows: 3 });
     this.draftKey = null; this.drafts = new Map();
@@ -90,7 +91,7 @@ export default class JecChat extends View {
       this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
       this.manual = false; this.error = null; this.loading = false; this.reading = false;
       this.seq++; this.readSeq++; this.more = false; this.stale = false; this.matchMethod = null;
-      this.registered = false; this.pendingRegistration = null;
+      this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
       if (next?.isCodex && next.cwd) this.scan(cx);
       cx.notify();
     }
@@ -105,7 +106,7 @@ export default class JecChat extends View {
   scan(cx, forcePicker = false) {
     if (this.loading || !this.target.cwd || this.target.machine) return;
     this.loading = true; this.error = null; this.selected = null;
-    this.matchMethod = null; this.registered = false; this.pendingRegistration = null;
+    this.matchMethod = null; this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
     this.messages = []; this.total = 0; this.readSeq++; this.reading = false;
     const seq = ++this.seq;
     cx.spawn(async cx => {
@@ -132,6 +133,7 @@ export default class JecChat extends View {
   }
   acceptRegistration(direct) {
     this.registered = true;
+    this.coreStatus = direct.status ?? null;
     this.pendingRegistration = direct.pending ? direct.id : null;
     this.sessions = []; this.more = false;
     this.selected = direct.session ?? null;
@@ -197,13 +199,15 @@ export default class JecChat extends View {
     this.sendError = null; this.sendNotice = null;
   }
   agentState(target = this.target) {
-    return terminalStatus(terminals().find(x => x.address === target?.terminal));
+    return this.coreStatus ?? terminalStatus(terminals().find(x => x.address === target?.terminal));
   }
   send(cx) {
     if (this.closed || this.sending || this.loading || !this.registered || !this.selected) return;
     const target = this.target, session = this.selected, key = this.draftKey, seq = this.seq;
     const prompt = this.composer.value();
-    if (!key || !prompt.trim()) return;
+    if (!key || !prompt.trim()) {
+      this.sendError = "Escribí un mensaje antes de enviar."; cx.notify(); return;
+    }
     const current = () => {
       if (this.closed || this.seq !== seq || this.draftKey !== key || !this.registered
           || this.selected?.id !== session.id || this.target?.terminal !== target.terminal) return false;
@@ -211,7 +215,7 @@ export default class JecChat extends View {
       const live = embeddedTarget();
       return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane;
     };
-    if (!current()) return;
+    if (!current()) { this.sendError = "El panel cambió. Volvé a abrir Chat."; cx.notify(); return; }
     this.sending = true; this.sendError = null; this.sendNotice = null; cx.notify();
     cx.spawn(async cx => {
       try {
@@ -240,11 +244,13 @@ export default class JecChat extends View {
         .child("Solo lectura · vinculá la sesión mediante los hooks de Codex para enviar mensajes.");
     }
     const state = this.agentState(target);
-    const ready = state === "idle" && !this.loading && !this.sending;
-    const enabled = ready && Boolean(this.draft.trim());
+    // Never let a stale presentation status or delayed change event prevent
+    // the click; sendPrompt performs a fresh, authoritative idle check.
+    const ready = !this.loading && !this.sending && state !== "working" && state !== "blocked";
+    const enabled = ready && Boolean(this.composer.value().trim());
     const status = this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención · abrí Terminal"
       : state === "working" ? "Codex está trabajando" : state === "idle" ? "Codex listo"
-      : "Esperando estado de Codex";
+      : "Estado: " + (state ?? "sin confirmar") + " · se verifica al enviar";
     return v_flex().flex_none().border_t(1).border_color(t.border).px(12).py(8).gap(6)
       .child(h_flex().items_center().gap(8)
         .child(div().flex_1().min_w(0)
@@ -254,7 +260,7 @@ export default class JecChat extends View {
           .font_medium().text_size(12).bg(enabled ? t.solid : t.raised)
           .text_color(enabled ? t.solid_foreground : t.dim)
           .border_1().border_color(enabled ? t.solid : t.border)
-          .when(enabled, el => el.cursor_pointer().hover(x => x.opacity(0.88))
+          .when(ready, el => el.cursor_pointer().hover(x => x.opacity(0.88))
             .on_click((_e, cx) => { cx.stop_propagation(); this.send(cx); }))
           .child(this.sending ? "Enviando…" : "Enviar")))
       .child(h_flex().items_center().gap(8)
