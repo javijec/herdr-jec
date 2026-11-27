@@ -73,6 +73,14 @@ Agents conserva Priority, Grouped by space, pines y navegación nativa. Se añad
 
 Las duraciones de trabajo/bloqueo se miden desde el primer estado observado por esta instancia del mod, se reinician al cambiar de estado o desaparecer de la lista; no son tiempos de ejecución del proveedor. Se conserva el timer oficial de 30 s y las actualizaciones de Herdr. No se estima porcentaje de avance: no existe ese dato en la API tipada de referencia. Sin hooks, polling adicional ni adaptadores externos.
 
+## v0.8 — Integraciones nativas de agentes
+
+Se incorpora Grouped by agent type en Agents, manteniendo los otros modos. Se identifica el proveedor por el app reportado antes que el nombre del programa, incluyendo Gentle Shell, OpenCode, Pi, Codex y Claude Code. No se confunde Pi con Gentle Shell si el reporte explícito dice gentle-shell. Si un wrapper sólo informa pi, se conserva Pi: no se adivina el proveedor.
+
+Se consumen campos opcionales de los reportes OSC 7501 que Herdr expone en terminals(): título, mensaje, motivo (permission/question/auth), progreso explícito válido y registros de actividad cuando el host los incluye. El porcentaje no se estima. Los registros no se cuentan como agentes adicionales ni alteran su estado oficial. Los programas reconocidos que no informan estado aparecen separados en No status, con navegación al pane, sin contarlos como agentes activos. No se lee el historial, no se instalan hooks ni se ejecutan comandos. Las integraciones existentes de cada proveedor deben publicar estado a Herdr; este mod no convierte un proveedor sin reporter en uno compatible.
+
+Referencia: [Herdr Core status](https://github.com/herdrdev/herdr-core/blob/master/crates/herdr-core/src/status.rs), [Gentle Shell desktop status](https://github.com/Gentleman-Programming/gentle-shell/blob/main/extensions/gentle-herdr-desktop-status.ts). Se tolera que versiones anteriores no expongan todos los campos.
+
 ## Desarrollo
 
 La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Para Workspace Chrome usar `node scripts/derive-workspace-chrome.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.

@@ -129,6 +129,68 @@ changes.push(...[
     "width: 220, height: 170, props: { sortMenu: true }"
   ]
 ]);
+changes.push(...[
+  [
+    "import { activitySnapshot, trackActivity, observedDuration, activityHint, descendants, groupActivity, machineName } from \"./activity.js\";",
+    "import { activitySnapshot, trackActivity, observedDuration, activityHint, descendants, groupActivity, machineName } from \"./activity.js\";\nimport { providerOf, nativeDetails, unreportedPanes } from \"./providers.js\";"
+  ],
+  [
+    "  { id: \"machine\", label: \"Grouped by machine\", icon: \"server\" },",
+    "  { id: \"machine\", label: \"Grouped by machine\", icon: \"server\" },\n  { id: \"provider\", label: \"Grouped by agent type\", icon: \"terminal\" },"
+  ],
+  [
+    "    const parentName = parent?.name || parent?.program?.name || k.parent || \"Unknown\";",
+    "    const parentName = parent?.name || parent?.program?.name || k.parent || \"Unknown\";\n    const report = nativeDetails(k);"
+  ],
+  [
+    "${elapsed ? \" · \"+activityHint(elapsed,this.now) : \"\"}`)",
+    "${elapsed ? \" · \"+activityHint(elapsed,this.now) : \"\"}${report.hint ? \" · \"+report.hint : \"\"}`)"
+  ],
+  [
+    "      .child(this.status(t, { status: st }, compact));",
+    "      .when(report.progress !== null, el => el.child(div().mr(4).flex_none().text_size(10).text_color(t.dim).child(`${report.progress}%`)))\n      .child(this.status(t, { status: st }, compact));"
+  ],
+  [
+    "    const byMachine = sort.id === \"machine\";",
+    "    const byMachine = sort.id === \"machine\";\n    const byProvider = sort.id === \"provider\";\n    const provider = a => providerOf(a,this.snapshot.terminalByAddress.get(a.address));"
+  ],
+  [
+    "    if (byMachine) rest.sort((a,b) => (machineName(a,spaceById)??\"\").localeCompare(machineName(b,spaceById)??\"\"));",
+    "    if (byMachine) rest.sort((a,b) => (machineName(a,spaceById)??\"\").localeCompare(machineName(b,spaceById)??\"\"));\n    if (byProvider) rest.sort((a,b) => provider(a).localeCompare(provider(b)));"
+  ],
+  [
+    "    const leads = leadPanes(panes());",
+    "    const paneSnapshot = panes();\n    const leads = leadPanes(paneSnapshot);\n    const unreported = unreportedPanes(paneSnapshot,this.snapshot.states,this.snapshot.terminalByAddress);"
+  ],
+  [
+    "      const rowHint = [a.space_name, label(a), machine ?? \"This computer\", activityHint(elapsed,now), inheritedBlocked ? \"Subagent needs attention\" : \"\"].filter(Boolean).join(\" · \");",
+    "      const report = nativeDetails(this.snapshot.terminalByAddress.get(a.address));\n      const rowHint = [provider(a), a.space_name, label(a), machine ?? \"This computer\", activityHint(elapsed,now), inheritedBlocked ? \"Subagent needs attention\" : \"\",report.hint].filter(Boolean).join(\" · \");"
+  ],
+  [
+    "      const full = byPriority || byMachine || isPinned;",
+    "      const full = byPriority || byMachine || byProvider || isPinned;"
+  ],
+  [
+    "        .child(this.status(t, inheritedBlocked ? {status:\"blocked\"} : a, byPriority && !isPinned));",
+    "        .when(report.progress !== null, el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(`${report.progress}%`)))\n        .child(this.status(t, inheritedBlocked ? {status:\"blocked\"} : a, byPriority && !isPinned));"
+  ],
+  [
+    "const id = byPriority ? `sec-${r}` : byMachine ? `machine-${JSON.stringify(machine)}` : `sp-${a.space}`;",
+    "const id = byPriority ? `sec-${r}` : byMachine ? `machine-${JSON.stringify(machine)}` : byProvider ? `provider-${JSON.stringify(provider(a))}` : `sp-${a.space}`;"
+  ],
+  [
+    "label: byPriority ? SECTION[r] : byMachine ? machine ?? \"This computer\" : a.space_name || \"\"",
+    "label: byPriority ? SECTION[r] : byMachine ? machine ?? \"This computer\" : byProvider ? provider(a) : a.space_name || \"\""
+  ],
+  [
+    "width: 220, height: 170, props: { sortMenu: true }",
+    "width: 220, height: 200, props: { sortMenu: true }"
+  ],
+  [
+    "      .child(v_flex().id(\"ag-list\").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode(\"always\").children(rows))",
+    "      .child(v_flex().id(\"ag-list\").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode(\"always\").children(rows)\n        .when(!collapsed && unreported.length > 0, el => el.child(div().px(8).pt(8).pb(4).text_size(11).text_color(t.dim)\n          .tooltip(\"Recognized foreground programs without a reported agent status. Not counted as agents.\").child(`No status · ${unreported.length}`))\n          .children(unreported.map(p => h_flex().id(`no-status-${p.address}`).h(26).px(8).gap(6).items_center().rounded(6)\n            .cursor_pointer().hover(s=>s.bg(t.hover)).tooltip(`${p.provider} · ${p.title} · No reported state`)\n            .on_click(()=>run(\"pane.focus\",{pane:p.pane}))\n            .child(svg(\"mods/workspace-chrome/terminal.svg\").size(13).flex_none().text_color(t.dim))\n            .child(div().flex_1().truncate().text_color(t.muted).child(p.provider))\n            .child(div().flex_none().text_size(10).text_color(t.dim).child(\"No status\"))))))"
+  ]
+]);
 const prefix="// Based on official Herdr Agents @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa; Apache-2.0 (LICENSE.herdr).\n// JEC v0.2: deduplicated activity counts and visible group/subagent counts.\n";
 function derive(source){
  let s=source.replace(/\r\n/g,"\n");
