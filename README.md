@@ -2,9 +2,9 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.3 (Codex, detección automática de la sesión activa)
+## jec-chat v0.4 (integración visual con el Herdr base)
 
-En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. La ventana anterior del chat aún puede abrirse desde la paleta.
+En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. **La vista Chat conserva el marco, el icono, la ruta y el encabezado de 30 px de Herdr**; los botones de sesión y actualización quedan dentro de una fila secundaria compacta. La ventana anterior del chat aún puede abrirse desde la paleta.
 
 - Windows 10/11, Linux y macOS (requiere Node.js >= 20 y Herdr Desktop).
 - Lee `~/.codex/sessions/**/rollout-*.jsonl` o `$CODEX_HOME/sessions`.
@@ -36,6 +36,6 @@ herdr-app check ~/.config/herdr-app/mods/jec-chat
 
 En Windows: `herdr-app check "$HOME\.config\herdr-app\mods\jec-chat"`.
 
-**Estado:** la interfaz ya fue probada visualmente en Windows con Codex; la identificación automática está probada con fixtures, pero falta validarla en el Codex real de una terminal Herdr. Consultar [RECIPE](mods/jec-chat/RECIPE.md) para alcance y decisiones.
+**Estado:** las capturas de una instalación Windows confirmaron la alternancia y la identificación de la sesión mediante su respuesta visible. El acabado compacto de v0.4 requiere validación visual en Herdr Desktop. Consultar [RECIPE](mods/jec-chat/RECIPE.md) para alcance y decisiones.
 
 Licencia: MIT.
