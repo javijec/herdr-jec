@@ -1,4 +1,4 @@
-# jec-chat v0.5 — alcance y contrato
+# jec-chat v0.6 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 
@@ -14,11 +14,19 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 
 ## Registro directo
 
-Los hooks de Codex 0.170.0 reciben `session_id`, `transcript_path` y `cwd`. El script `session-hook.cjs` lee el JSON por stdin y usa `HC_TERMINAL_ID` y `hc label` para vincular el thread raíz con la terminal. `SessionStart` registra el UUID, `UserPromptSubmit` y `Stop` actualizan la ruta, `SessionEnd` borra el registro si sigue correspondiendo al mismo UUID. No se guardan prompts ni respuestas. No hay base de datos adicional. Los errores no bloquean al agente.
+Los hooks de Codex (registro validado en 0.172.0 en Windows) reciben `session_id`, `transcript_path` y `cwd`. El script `session-hook.cjs` lee el JSON por stdin y usa `HC_TERMINAL_ID` y `hc label` para vincular el thread raíz con la terminal. `SessionStart` registra el UUID, `UserPromptSubmit` y `Stop` actualizan la ruta, `SessionEnd` borra el registro si sigue correspondiendo al mismo UUID. No se guardan prompts ni respuestas. No hay base de datos adicional. Los errores no bloquean al agente.
 
 `install-hooks.cjs` agrega los hooks preservando los existentes; crea backup antes de reemplazar el archivo, verifica que el original no cambió durante la escritura y no duplica entradas idénticas. La aprobación se hace en `/hooks`. El funcionamiento depende de la herencia de `HC_TERMINAL_ID` y del acceso a `hc` desde el hook. Usar Codex con `--no-daemon` para evitar que el servidor compartido registre otra terminal.
 
 Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo archivo sin recorrer el historial. El selector manual es una salida de emergencia, no una fuente de identidad.
+
+## Chat interactivo
+
+- El composer usa `TextareaState` y `Textarea` nativos. Enter agrega líneas; sólo el botón Enviar inicia la acción.
+- El proveedor valida el texto, exige una sesión registrada, consulta `hc get` para comparar el UUID y la ruta del archivo y verifica el estado live/idle. Luego comprueba que el panel no cambió y ejecuta `hc send --if idle --json -- <terminal> <texto>`. No usa --force ni crea otro proceso de Codex.
+- No se reenvía automáticamente ante errores. Se conserva el borrador en memoria y se limpia únicamente después de una respuesta de envío exitosa; los mensajes del historial vienen exclusivamente del JSONL. Los borradores se mantienen separados por terminal y UUID durante la vida de la vista.
+- Si Codex está trabajando o bloqueado, se permite preparar un borrador pero no enviarlo. Se usa Terminal para permisos, comandos slash y comandos shell. El picker de sesiones antiguas sigue siendo sólo lectura.
+- `hc send --if idle` es necesario; si el core no lo admite, falla sin enviar. Se requiere validación real de la GUI.
 
 ## Integración visual
 
@@ -33,7 +41,7 @@ Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo ar
 
 - El lector sólo lee archivos regulares dentro del directorio de sesiones Codex y
   verifica que `session_meta.payload.cwd` coincida con el `cwd` elegido.
-- No se envía texto al agente, no se usan claves de API, no se alteran sesiones.
+- No se usan claves de API ni se editan archivos JSONL. Los mensajes se envían explícitamente mediante hc al agente activo; no se fuerzan permisos.
 - Ni la fecha de actualización, ni una carpeta compartida, ni la existencia de una sola sesión prueban por sí solas la identidad activa.
 - La identificación por pantalla compara hasta 10 sesiones; con más sesiones y sin UUID explícito se utiliza el selector.
 - Tras un cambio de la TUI a Chat, se reevalúa la sesión: Codex puede cambiar de conversación con `/new` o `/resume`.
