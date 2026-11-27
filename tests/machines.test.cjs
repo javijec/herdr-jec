@@ -21,3 +21,11 @@ test("machine summaries isolate local and remote spaces and count statuses",asyn
  assert.equal(rows[1].counts.blocked,1);assert.equal(rows[1].counts.unknown,1);
  assert.equal(rows[1].spaces[0].tabs,2);
 });
+
+test("default installer retires chat before installing Machines; no native build",()=>{
+ const root=path.join(__dirname,".."),s=fs.readFileSync(path.join(root,"install.ps1"),"utf8"),d=fs.readFileSync(path.join(root,"disable-chat.ps1"),"utf8");
+ assert.match(s,/disable-chat\.ps1/);assert.match(s,/mods\/jec-machines/);
+ assert.doesNotMatch(s,/cargo|install-hooks\.cjs|layout\.switch --name jec-chat/);
+ assert.match(d,/layout\.switch --name main/);assert.match(d,/disable-chat-hooks\.cjs/);
+ assert.doesNotMatch(d,/terminal\.kill|pane\.close/);
+});

@@ -88,14 +88,14 @@ test("explicit Terminal forgets only active tab; automatic fallback does not for
   assert.match(pane,/p\.terminal !== wanted\.terminal/);
 });
 
-test("single installed mod dispatches header and chat roles on stock Herdr",()=>{
+test("archived Chat source keeps its unified roles; installer now selects Machines",()=>{
  const chat=read("mods/jec-chat/main.js"), header=read("mods/jec-chat/pane-header.js"), installer=read("install.ps1");
  assert.match(chat,/this\.headerRole = config\.paneHeader === true/);
  assert.match(chat,/if \(this\.headerRole\) return this\.paneHeader\.render\(cx\)/);
  assert.match(chat,/close\(\) \{ if \(this\.headerRole\) return/);
  assert.match(header,/Derived from herdrdev\/herdr-app/);
  assert.doesNotMatch(chat+header,/pane\.view/);
- assert.match(installer,/@\('jec-chat'\)/);
+ assert.match(installer,/mods\/jec-machines/);
  assert.doesNotMatch(installer,/@\('jec-chat', 'jec-pane'\)/);
  assert.equal(fs.existsSync(path.join(root,"mods/jec-pane")),false);
 });

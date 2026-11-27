@@ -1,7 +1,6 @@
-name: jec-chat checks
+name: JEC checks (manual)
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 jobs:
   node:
     strategy:
@@ -21,6 +20,9 @@ jobs:
           node --check mods/jec-chat/providers/install-hooks.cjs
       - name: Check Herdr mod JavaScript syntax
         run: |
+          node --check mods/jec-machines/main.js
+          node --check mods/jec-machines/model.js
+          node --check scripts/disable-chat-hooks.cjs
           node --check mods/jec-chat/main.js
           node --check mods/jec-chat/pane-header.js
           node --check mods/jec-chat/session.js
@@ -34,6 +36,6 @@ jobs:
           node --check mods/jec-chat/providers/codex.js
           node --check mods/jec-chat/providers/match.js
       - name: Validate layout and mod metadata
-        run: node -e "const f=require('fs');for(const p of ['layouts/jec-chat.json','mods/jec-chat/mod.json']) JSON.parse(f.readFileSync(p,'utf8'))"
+        run: node -e "const f=require('fs');for(const p of ['layouts/jec-chat.json','mods/jec-chat/mod.json','mods/jec-machines/mod.json']) JSON.parse(f.readFileSync(p,'utf8'))"
       - name: Run all JEC tests
         run: node --test
