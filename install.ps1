@@ -1,5 +1,6 @@
 # Instala JEC Chat sin modificar el layout main ni los mods originales de Herdr.
 # El layout personalizado jec-chat alterna Chat/Terminal en la misma area central.
+param([switch]$SkipCodexHooks)
 $ErrorActionPreference = 'Stop'
 $modRoot = Join-Path $HOME '.config\herdr-app\mods'
 $layoutRoot = Join-Path $HOME '.config\herdr-app\layouts'
@@ -21,6 +22,18 @@ if (-not (Test-Path $sourceLayout)) { throw 'No se encontro layouts\jec-chat.jso
 $targetLayout = Join-Path $layoutRoot 'jec-chat.json'
 Copy-Item -Path $sourceLayout -Destination $targetLayout -Force
 Write-Host "Layout instalado: $targetLayout"
+
+if (-not $SkipCodexHooks) {
+  if (Get-Command node -ErrorAction SilentlyContinue) {
+    $hookInstaller = Join-Path $modRoot 'jec-chat\providers\install-hooks.cjs'
+    & node $hookInstaller
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning 'No se pudieron instalar los hooks de Codex. JEC Chat seguira usando el detector anterior.'
+    }
+  } else {
+    Write-Warning 'Node.js no esta en PATH; no se instalaron los hooks de Codex.'
+  }
+}
 
 if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
   foreach ($name in @('jec-chat', 'jec-pane')) {
