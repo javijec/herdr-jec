@@ -1,6 +1,7 @@
 // Agent-neutral interface. Only enable providers after identity and actions
 // have been validated against the agent's existing live terminal.
 import * as codex from "./codex.js";
+import * as opencode from "./opencode.js";
 import { agentInfo, supportsChat, targetMachine } from "../provider-catalog.js";
 
 const codexProvider = Object.freeze({
@@ -17,7 +18,17 @@ const codexProvider = Object.freeze({
   blockedPreview: (target, session) => codex.blockedScreen({ ...target, isCodex: target.providerId === "codex" }, session),
 });
 
-const providers = new Map([[codexProvider.id, codexProvider]]);
+const opencodeProvider = Object.freeze({
+  id: "opencode", name: "OpenCode",
+  capabilities: Object.freeze({ history: true, discovery: false, send: true, interrupt: true, blockedPreview: true, approval: false, remote: false }),
+  identify: opencode.identify,
+  read: opencode.read,
+  status: opencode.status,
+  send: opencode.send,
+  interrupt: opencode.interrupt,
+  blockedPreview: opencode.blockedPreview,
+});
+const providers = new Map([[codexProvider.id, codexProvider], [opencodeProvider.id, opencodeProvider]]);
 export function providerFor(target, manual = false) {
   if (!target?.terminal || !target?.cwd) return null;
   if (supportsChat(target)) return providers.get(target.providerId) ?? null;
