@@ -1,4 +1,4 @@
-# jec-chat v0.3 — alcance y contrato
+# jec-chat v0.4 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 
@@ -11,6 +11,15 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 5. Al abrir Chat, consulta `hc get --json <terminal>` y `hc read <terminal> --lines 80`. Intenta identificar la sesión por UUID explícito en `codex resume <UUID>` o una respuesta distintiva que coincida con la pantalla real. Si hay varias coincidencias o evidencia insuficiente, aparece el selector. Ninguna: aviso.
 6. Renderiza mensajes y herramientas del JSONL con `TextView.markdown`.
 7. **Terminal** cambia al bloque original `main` sin detener nada; la sesión seleccionada se conserva al alternar. La paleta sigue abriendo la ventana de chat anterior en el layout base.
+
+## Integración visual
+
+- No se cambian los mods originales ni el layout `main`.
+- El chat embebido reproduce el marco redondeado, borde, fondo e icono de la terminal de Herdr.
+- Su encabezado ocupa 30 px, como el de `jec-pane`, mostrando programa, carpeta y botón **Terminal**.
+- **Sesión** y **Actualizar** quedan en la fila de información de conversación, no en una barra de aplicación separada.
+- La vista abierta desde la paleta conserva su encabezado de diálogo, separado de la versión embebida.
+- La barra de pestañas, el panel Files/Changes, Spaces, Agents y la barra de estado permanecen sin cambios.
 
 ## Seguridad y límites
 
