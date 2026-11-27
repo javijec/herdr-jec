@@ -2,7 +2,7 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.5 (registro directo de sesiones Codex)
+## jec-chat v0.6 (chat interactivo con Codex)
 
 En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. **La vista Chat conserva el marco, el icono, la ruta y el encabezado de 30 px de Herdr**; los botones de sesión y actualización quedan dentro de una fila secundaria compacta. La ventana anterior del chat aún puede abrirse desde la paleta.
 
@@ -11,7 +11,9 @@ En el layout personal `jec-chat`, las terminales locales de Codex muestran un bo
 - Con los hooks autorizados, Codex registra directamente el UUID y la ruta del JSONL en la etiqueta `jec.chat.codex` de su terminal Herdr. Chat abre ese archivo sin recorrer sesiones ni comparar texto.
 - Para sesiones antiguas o sin hooks activos, se conserva el detector anterior (respuesta visible o UUID explícito) y el selector manual.
 - Refresca la conversacion cada 4 segundos mientras esta abierta.
-- Por ahora solo local: máquinas remotas, envío de mensajes y permisos interactivos quedan para siguientes versiones.
+- Composer nativo de varias líneas, con borradores en memoria separados por terminal y UUID. **Enviar** usa `hc send --if idle`; requiere registro directo y no inicia otro Codex.
+- Los prompts enviados y respuestas aparecen cuando Codex escribe el JSONL. El botón Enviar no está disponible mientras trabaja o espera permisos.
+- Por ahora solo local: máquinas remotas y aprobaciones interactivas quedan para siguientes versiones.
 
 ### Instalacion en Windows (PowerShell)
 
@@ -25,7 +27,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 El instalador intenta activar el layout `jec-chat`. Si no lo consigue, ejecutá `herdr-app do layout.switch --name jec-chat` o elegilo con `Ctrl+Shift+L` en Herdr. Seleccioná una terminal **Codex** y pulsá **Chat** en su encabezado. Si detecta con seguridad la conversación abierta, se muestra directamente; de lo contrario, pedirá elegirla. El botón **Terminal** vuelve al terminal original sin reiniciar el agente.
 
-### Activar el registro directo (Codex 0.170.0)
+### Activar el registro directo (validado en Codex 0.172.0 / Windows)
 
 El instalador agrega los hooks `SessionStart`, `UserPromptSubmit`, `Stop` y `SessionEnd` a `$CODEX_HOME/hooks.json` (por defecto `~/.codex/hooks.json`), preservando los existentes y guardando una copia de seguridad si el archivo ya existía. Podés usar `-SkipCodexHooks` para instalar solo el mod.
 
@@ -38,6 +40,12 @@ El hook necesita Node.js, `hc` accesible desde su entorno y `HC_TERMINAL_ID` her
 
 Si Codex no fue reconocido automáticamente, todavía podés abrir el chat desde la paleta de comandos (`Ctrl+Shift+P`) y buscar manualmente sus sesiones. En cualquier caso, elegí la sesión correcta: compartir una carpeta no demuestra que sea la misma sesión.
 
+### Enviar mensajes desde Chat
+
+Con `registro Codex` visible y el agente en estado idle, escribí un mensaje y pulsá **Enviar**. Enter agrega una línea. No uses el composer para comandos slash, comandos del shell ni solicitudes de permisos: volvé a **Terminal** para eso. Si el envío falla, el texto se conserva y no se reintenta automáticamente; comprobá la TUI antes de reenviar. El envío exige una versión de Herdr Core con `hc send --if idle` (ver `hc send --help`).
+
+Al actualizar desde la v0.5 ya funcional no es necesario reautorizar hooks si el instalador no modifica sus comandos.
+
 ### Desarrollo
 
 ```sh
@@ -48,6 +56,6 @@ herdr-app check ~/.config/herdr-app/mods/jec-chat
 
 En Windows: `herdr-app check "$HOME\.config\herdr-app\mods\jec-chat"`.
 
-**Estado:** alternancia y detección por pantalla verificadas en Windows. El registro de hooks y lectura directa tienen pruebas automatizadas, pero necesitan validación en Codex/Herdr reales. Consultar [RECIPE](mods/jec-chat/RECIPE.md) para alcance y decisiones.
+**Estado:** alternancia y registro directo verificados por el usuario en Windows con Codex 0.172.0. El envío de v0.6 tiene pruebas unitarias; falta comprobar la GUI y un envío real en Herdr. Consultar [RECIPE](mods/jec-chat/RECIPE.md) para alcance y decisiones.
 
 Licencia: MIT.
