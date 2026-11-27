@@ -23,10 +23,10 @@ Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo ar
 ## Chat interactivo
 
 - El composer usa `TextareaState` y `Textarea` nativos. Enter agrega líneas; sólo el botón Enviar inicia la acción.
-- El proveedor valida el texto, exige una sesión registrada, consulta `hc get` para comparar el UUID y la ruta del archivo y verifica el estado live/idle. Luego comprueba que el panel no cambió y ejecuta `hc send --if idle --json -- <terminal> <texto>`. No usa --force ni crea otro proceso de Codex.
+- El proveedor valida el texto, exige una sesión registrada, consulta `hc get` para comparar el UUID y la ruta del archivo y verifica que la terminal esté live y Codex esté idle o done. Luego comprueba que el panel no cambió y usa `hc send --if idle --json -- <terminal> <texto>` si está idle, o `hc send --json -- <terminal> <texto>` si está done. Herdr no admite `--if done`: en este segundo caso la comprobación del estado no es atómica con el envío, pero el core sigue rechazando blocked sin --force. No usa --force ni crea otro proceso de Codex.
 - No se reenvía automáticamente ante errores. Se conserva el borrador en memoria y se limpia únicamente después de una respuesta de envío exitosa; los mensajes del historial vienen exclusivamente del JSONL. Los borradores se mantienen separados por terminal y UUID durante la vida de la vista.
 - Si Codex está trabajando o bloqueado, se permite preparar un borrador pero no enviarlo. Se usa Terminal para permisos, comandos slash y comandos shell. El picker de sesiones antiguas sigue siendo sólo lectura.
-- `hc send --if idle` es necesario; si el core no lo admite, falla sin enviar. Se requiere validación real de la GUI.
+- Para el estado idle se requiere `hc send --if idle`; si el core no lo admite, falla sin enviar. Se requiere validación real de la GUI.
 
 ## Integración visual
 
