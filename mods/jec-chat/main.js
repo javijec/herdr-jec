@@ -21,18 +21,18 @@ export default class JecChat extends View {
     this.loading = false; this.reading = false; this.error = null;
     this.manual = false; this.stale = false; this.more = false;
     this.scroll = ScrollHandle.new();
-    this.closed = false; this.seq = 0;
+    this.closed = false; this.seq = 0; this.readSeq = 0;
     if (this.target.terminal && this.target.cwd && !this.target.machine && this.target.isCodex) this.scan(cx);
     cx.timer.every(4000, (cx) => {
       if (!this.closed && this.selected && !this.reading && appWindow()?.visible !== false) this.refresh(cx);
     });
   }
-  close() { this.closed = true; this.seq++; }
+  close() { this.closed = true; this.seq++; this.readSeq++; }
   back() { closeOverlay(props()?.overlay); }
   scan(cx) {
     if (this.loading || !this.target.cwd || this.target.machine) return;
     this.loading = true; this.error = null; this.selected = null;
-    this.messages = []; this.total = 0;
+    this.messages = []; this.total = 0; this.readSeq++; this.reading = false;
     const seq = ++this.seq;
     cx.spawn(async cx => {
       try {
@@ -46,28 +46,29 @@ export default class JecChat extends View {
   }
   choose(session, cx) {
     this.selected = session; this.messages = []; this.total = 0; this.error = null;
+    this.readSeq++; this.reading = false;
     this.refresh(cx);
   }
   refresh(cx) {
     if (!this.selected || this.reading || this.closed) return;
     this.reading = true;
-    const file = this.selected.file, seq = this.seq;
+    const file = this.selected.file, seq = this.seq, readSeq = ++this.readSeq;
     cx.spawn(async cx => {
       try {
         const result = await readSession(this.target.cwd, file);
-        if (this.closed || seq !== this.seq || this.selected?.file !== file) return;
+        if (this.closed || seq !== this.seq || readSeq !== this.readSeq || this.selected?.file !== file) return;
         this.messages = result.messages ?? []; this.total = result.total ?? this.messages.length;
         this.stale = Boolean(result.truncated); this.error = null;
         this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
-      } catch (e) { if (seq === this.seq) this.error = String(e?.message ?? e); }
-      finally { if (seq === this.seq) { this.reading = false; cx.notify(); } }
+      } catch (e) { if (seq === this.seq && readSeq === this.readSeq) this.error = String(e?.message ?? e); }
+      finally { if (seq === this.seq && readSeq === this.readSeq) { this.reading = false; cx.notify(); } }
     });
   }
   sessionPicker(t) {
     return v_flex().gap(8).p(14)
       .child(div().font_semibold().text_size(16).child("Elegí la sesión correcta"))
       .child(div().text_color(t.muted).text_size(12).child(
-        "Varias sesiones Codex usan esta carpeta. Elegí una: no se selecciona automáticamente la más reciente."))
+        "Elegí la sesión de Codex que querés consultar. Si hay varias, no se elige automáticamente la más reciente."))
       .children(this.sessions.map((s, i) =>
         h_flex().id("jec-session-" + i).p(11).gap(10).rounded(8).bg(t.raised)
           .border_1().border_color(t.border).cursor_pointer().hover(el => el.bg(t.hover))
@@ -108,7 +109,7 @@ export default class JecChat extends View {
           [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ")))
         .child(button(t, "jec-terminal", "← Terminal", () => this.back()))
         .when(Boolean(this.selected), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => {
-          this.selected = null; this.messages = []; this.reading = false; this.error = null; cx.notify();
+          this.selected = null; this.messages = []; this.readSeq++; this.reading = false; this.error = null; cx.notify();
         })))
         .child(button(t, "jec-refresh", "Actualizar", cx => {
           if (this.selected) this.refresh(cx); else if (canRead) this.scan(cx);
@@ -126,7 +127,7 @@ export default class JecChat extends View {
             this.manual = true; this.scan(cx); cx.notify();
           }))))
       .when(canRead && this.loading, el => el.child(div().p(16).text_color(t.muted).child("Buscando sesiones de Codex…")))
-      .when(canRead && !this.loading && !this.selected && this.sessions.length > 1, el => el.child(this.sessionPicker(t)))
+      .when(canRead && !this.loading && !this.selected && this.sessions.length > 0, el => el.child(this.sessionPicker(t)))
       .when(canRead && !this.loading && !this.selected && this.sessions.length === 0, el =>
         el.child(div().p(18).text_color(t.muted).child(
           "No se encontraron sesiones de Codex en esta carpeta. Iniciá Codex en la terminal y volvé a actualizar.")))
