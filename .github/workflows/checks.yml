@@ -16,5 +16,12 @@ jobs:
           node-version: '22'
       - name: Check Codex reader syntax
         run: node --check mods/jec-chat/providers/codex.cjs
+      - name: Check Herdr mod JavaScript syntax
+        run: |
+          node --check mods/jec-chat/main.js
+          node --check mods/jec-chat/session.js
+          node --check mods/jec-chat/providers/codex.js
+      - name: Validate mod JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('mods/jec-chat/mod.json','utf8'))"
       - name: Run reader tests
         run: node --test tests/codex.test.cjs
