@@ -81,7 +81,8 @@ test("Chat view preferences are independent per tab and space", async () => {
 });
 test("explicit Terminal forgets only active tab; automatic fallback does not forget",()=>{
   const chat=read("mods/jec-chat/main.js"), pane=read("mods/jec-chat/pane-header.js");
-  assert.match(chat,/back\(\) \{[\s\S]*?forgetChat\(shared\(VIEW_KEY\), activeTab\(spaces\(\)\)\)/);
+  assert.match(chat,/back\(\) \{[\s\S]*?forgetChat\(shared\(VIEW_KEY\), active\)/);
+  assert.match(chat,/live\.terminal !== this\.target\?\.terminal/);
   assert.doesNotMatch(chat,/if \(!next && view === "jec-chat-view"\) this\.back\(\)/);
   assert.match(pane,/cx\.timer\.every\(250, \(\) => this\.restoreChat\(\)\)/);
   assert.match(pane,/p\.terminal !== wanted\.terminal/);
