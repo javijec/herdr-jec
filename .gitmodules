@@ -1,0 +1,4 @@
+[submodule "upstream/herdr-app"]
+	path = upstream/herdr-app
+	url = https://github.com/herdrdev/herdr-app.git
+	shallow = true

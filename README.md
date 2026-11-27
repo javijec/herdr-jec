@@ -2,6 +2,8 @@
 
 Mods sobre Herdr Desktop oficial, sin modificar ni compilar el ejecutable.
 
+**Base oficial:** [upstream/herdr-app](upstream/herdr-app) es una referencia Git fijada con todos los mods originales, layouts, recursos y API. Consultar [inventario y política de reutilización](upstream/README.md). El instalador no copia ni compila esta referencia; se reutiliza el código oficial antes de crear cualquier mod nuevo.
+
 ## JEC Machines v0.1 (experimental)
 
 Primer paso: una vista nativa de equipos locales/remotos, disponibilidad del layout, espacios, cantidad de pestañas y estados de agentes. Usa las APIs oficiales machines(), spaces(), agents() y space.select. Se abre desde la paleta, sin modificar el sidebar ni el layout. No mide CPU/RAM, no prueba conectividad por SSH, no instala agentes. La disponibilidad es la del layout según Herdr.
