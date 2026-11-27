@@ -2,7 +2,7 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.7 (chat interactivo con Codex)
+## jec-chat v0.8 (arquitectura de proveedores multiagente)
 
 En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. **La vista Chat conserva el marco, el icono, la ruta y el encabezado de 30 px de Herdr**; los botones de sesión y actualización quedan dentro de una fila secundaria compacta. La ventana anterior del chat aún puede abrirse desde la paleta.
 
@@ -14,6 +14,19 @@ En el layout personal `jec-chat`, las terminales locales de Codex muestran un bo
 - Composer nativo de varias líneas, con borradores en memoria separados por terminal y UUID. **Enviar** usa `hc send --if idle` cuando el agente está idle y `hc send` sin `--force` cuando está done; requiere registro directo y no inicia otro Codex.
 - Los prompts enviados y respuestas aparecen cuando Codex escribe el JSONL. El botón Enviar no está disponible mientras trabaja o espera permisos. Detener interrumpe el turno mediante `hc interrupt`, sin cerrar Codex. Si está bloqueado, Ver solicitud muestra la pantalla original y Resolver en Terminal vuelve a la TUI.
 - Por ahora solo local: máquinas remotas y aprobaciones interactivas quedan para siguientes versiones.
+
+### Proveedores de agentes
+
+La vista compartida usa el contrato de `mods/jec-chat/providers/index.js` para identificar la sesión, leer el historial, enviar, detener y mostrar diálogos. La detección de programa es independiente de la habilitación del proveedor. La identidad incluye máquina, terminal, proveedor y sesión.
+
+| Agente | Estado de v0.8 |
+| --- | --- |
+| Codex local | Proveedor activo, conserva el comportamiento validado de v0.7 |
+| OpenCode | Detectado, adaptador de sesión todavía pendiente |
+| Pi / Gentle Shell | Detectado, adaptador de sesión todavía pendiente |
+| Máquinas remotas | Identidad y capacidades contempladas, lectura/envío deshabilitados |
+
+No se instalaron hooks adicionales ni se habilitan acciones sobre agentes sin un proveedor verificado. El punto de recuperación de la versión validada es la rama `stable/v0.7`.
 
 ### Instalacion en Windows (PowerShell)
 
