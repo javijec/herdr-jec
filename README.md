@@ -67,6 +67,12 @@ Sólo consulta la máquina activa cuando su layout está listo y la ventana visi
 
 Se prioriza el contador global de rendimiento de Windows (independiente del idioma), conservando el cero como lectura válida. Si WMI no devuelve CPU pero sí RAM/disco, se intenta GetSystemTimes sin descartar esas mediciones. El fallback nativo usa Add-Type sólo cuando es necesario y no instala servicios ni requiere un módulo externo.
 
+## v0.7 — Actividad avanzada de agentes
+
+Agents conserva Priority, Grouped by space, pines y navegación nativa. Se añade Grouped by machine al menú de ordenamiento. Los grupos muestran actividad de sus miembros y descendientes sin duplicarlos dentro del grupo (un agente fijado puede aparecer en más de un grupo). Los árboles conservan su indentación y muestran duración observada de trabajo/bloqueo también en subagentes. Un padre con un descendiente bloqueado conserva el indicador de atención incluso plegado o en la barra compacta. Los tooltips detallan el contexto y el padre del subagente.
+
+Las duraciones de trabajo/bloqueo se miden desde el primer estado observado por esta instancia del mod, se reinician al cambiar de estado o desaparecer de la lista; no son tiempos de ejecución del proveedor. Se conserva el timer oficial de 30 s y las actualizaciones de Herdr. No se estima porcentaje de avance: no existe ese dato en la API tipada de referencia. Sin hooks, polling adicional ni adaptadores externos.
+
 ## Desarrollo
 
 La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Para Workspace Chrome usar `node scripts/derive-workspace-chrome.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.

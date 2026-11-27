@@ -5,6 +5,7 @@
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { agentSummary, summaryLabel } from "./agent-summary.js";
+import { activitySnapshot, trackActivity, observedDuration, activityHint, descendants, groupActivity, machineName } from "./activity.js";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout } from "herdr";
 
 function find(node, id) {
@@ -65,6 +66,7 @@ const kidStatus = (k, listed) => {
 const SORTS = [
   { id: "priority", label: "Priority", icon: "clock" },
   { id: "grouped", label: "Grouped by space", icon: "layers" },
+  { id: "machine", label: "Grouped by machine", icon: "server" },
 ];
 const sortOf = () => SORTS.find((s) => s.id === shared("agents.sort")) ?? SORTS[0];
 const SECTION = { 4: "Needs you", 3: "Done", 2: "Working", 1: "Idle" };
@@ -88,6 +90,7 @@ export default class Agents extends View {
   init(_props, cx) {
     if (props()?.sortMenu) return;
     this.folded = new Set();
+    this.activity = new Map();
     // Each agent's last state and when it changed (ms), kept across restarts.
     try { this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}"); } catch { this.changed = {}; }
     if (!this.changed || typeof this.changed !== "object" || Array.isArray(this.changed)) this.changed = {};
@@ -174,15 +177,8 @@ export default class Agents extends View {
   }
 
   // Live sub-agents of `addr`, depth first, each with the tree lines in front of it.
-  tree(all, addr, lead = []) {
-    const kids = all.filter((k) => k.parent === addr && k.state === "live");
-    return kids.flatMap((k, i) => {
-      const last = i === kids.length - 1;
-      return [
-        { t: k, lines: [...lead, last ? "└" : "├"] },
-        ...this.tree(all, k.address, [...lead, last ? "" : "│"]),
-      ];
-    });
+  tree(_all, addr) {
+    return descendants(this.snapshot.children, addr);
   }
 
   subRow(t, s, shown, compact) {
@@ -190,6 +186,9 @@ export default class Agents extends View {
     const st = kidStatus(k, this.listed);
     const pic = icon(k.program, 14, t.foreground);
     const on = k.address === shown;
+    const elapsed = this.activity.get(k.address);
+    const parent = this.snapshot.terminalByAddress.get(k.parent);
+    const parentName = parent?.name || parent?.program?.name || k.parent || "Unknown";
     return h_flex()
       .id(`sub-${k.address}`)
       .pl(39)
@@ -202,12 +201,14 @@ export default class Agents extends View {
       .text_size(12.5)
       .when(on, (el) => el.bg(t.raised))
       .hover((s) => s.bg(t.hover))
+      .tooltip(`${k.name || k.template || k.program?.name || k.address} · Parent: ${parentName}${elapsed ? " · "+activityHint(elapsed,this.now) : ""}`)
       .on_click(() => (this.listed.has(k.address) ? run("pane.focus", { terminal: k.address }) : this.peek(k.address)))
       .children(s.lines.map(l => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
       .when(Boolean(pic), el => el.child(div().mr(8).child(pic)))
       .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(k.name || k.template || k.program?.name || k.address))
+      .when(Boolean(elapsed), el => el.child(div().ml(4).mr(4).flex_none().text_size(10).text_color(st==="blocked"?t.blocked:t.dim).child(observedDuration(elapsed,this.now))))
       .child(this.status(t, { status: st }, compact));
   }
 
@@ -235,6 +236,11 @@ export default class Agents extends View {
     const shown = focused()?.agent;
     const now = Date.now();
     this.track(list, now);
+    this.now = now;
+    this.snapshot = activitySnapshot(list, all, kidStatus);
+    this.activity = trackActivity(this.activity, this.snapshot.states, now);
+    const sp = spaces();
+    const spaceById = new Map(sp.map(s=>[s.id,s]));
     // A kept sub-agent (one with a pane) is in agents() too: where a tree shows
     // it, it gets no row of its own, unless it's pinned.
     const nested = new Set(collapsed ? [] : list.flatMap((a) => this.tree(all, a.address).map((s) => s.t.address)));
@@ -242,6 +248,7 @@ export default class Agents extends View {
     const tabCounts = new Map();
     for (const a of list) tabCounts.set(a.tab, (tabCounts.get(a.tab) ?? 0) + 1);
     const byPriority = sort.id === "priority";
+    const byMachine = sort.id === "machine";
     // A helper's done is its own row's news: it doesn't pull a working parent out of Working.
     const kidRank = (k) => { const s = kidStatus(k, this.listed); return RANK[s === "done" ? "idle" : s] ?? 0; };
     const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => kidRank(s.t)))]));
@@ -249,6 +256,7 @@ export default class Agents extends View {
     if (byPriority) list = [...list].sort((x, y) => rankOf(y) - rankOf(x) || this.since(y) - this.since(x) || y.seq - x.seq);
     const pinned = list.filter((a) => a.pinned);
     const rest = list.filter((a) => !a.pinned);
+    if (byMachine) rest.sort((a,b) => (machineName(a,spaceById)??"").localeCompare(machineName(b,spaceById)??""));
     list = [...pinned, ...rest];
     setAgentOrder(list.map((a) => a.address));
 
@@ -273,7 +281,7 @@ export default class Agents extends View {
         .items_center()
         .rounded(4)
         .text_size(11)
-        .text_color(open ? t.dim : (t[top] ?? t.dim))
+        .text_color(top === "blocked" ? t.blocked : open ? t.dim : (t[top] ?? t.dim))
         .cursor_pointer()
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
         .on_click((_e, cx) => {
@@ -291,7 +299,7 @@ export default class Agents extends View {
     // otherwise read the same.
     // Read the pane snapshot once: every host read copies the whole list into JS.
     const leads = leadPanes(panes());
-    const tabs = new Map(spaces().flatMap(s => s.tabs).map(tab => [tab.id, tab]));
+    const tabs = new Map(sp.flatMap(s => s.tabs).map(tab => [tab.id, tab]));
     const labels = new Map(list.map(a => {
       const tab = tabs.get(a.tab);
       const many = tabCounts.get(a.tab) > 1;
@@ -309,7 +317,10 @@ export default class Agents extends View {
       const pic = icon(a.program, 16, t.foreground);
       const more = detail.get(a.address);
       // An agent on another machine (`vps/t7`) says which.
-      const machine = a.address.includes("/") ? a.address.split("/")[0] : null;
+      const machine = machineName(a,spaceById);
+      const elapsed = this.activity.get(a.address);
+      const inheritedBlocked = a.status !== "blocked" && rankOf(a) === RANK.blocked;
+      const rowHint = [a.space_name, label(a), machine ?? "This computer", activityHint(elapsed,now), inheritedBlocked ? "Subagent needs attention" : ""].filter(Boolean).join(" · ");
       if (collapsed) {
         return h_flex()
           .id(`ag-${a.address}`)
@@ -322,9 +333,10 @@ export default class Agents extends View {
           .gap(4)
           .when(a.focused, (el) => el.bg(t.selected))
           .hover((s) => s.bg(t.hover))
+          .tooltip(rowHint)
           .on_click(() => run("pane.focus", { pane: a.pane }))
           .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(a.focused ? t.foreground : t.muted).child(String(i + 1)))
-          .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, a, true)));
+          .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, inheritedBlocked ? {status:"blocked"} : a, true)));
       }
       const when = this.since(a);
       const idle = a.status === "idle" && !a.focused;
@@ -348,7 +360,7 @@ export default class Agents extends View {
         .child(svg(`mods/workspace-chrome/${isPinned ? "pin-off" : "pin"}.svg`).size(13));
       // Under a space header the space goes without saying; an automatic tab number says nothing.
       // Without a space header above (priority, pinned) the row names its space.
-      const full = byPriority || isPinned;
+      const full = byPriority || byMachine || isPinned;
       const name = full ? a.space_name || label(a) : more ?? (/^\d+$/.test(label(a)) ? a.program?.name || label(a) : label(a));
       return h_flex()
         .id(`ag-${a.address}`)
@@ -366,6 +378,7 @@ export default class Agents extends View {
           else if (this.hovered === a.address) this.hovered = null;
           cx.notify();
         })
+        .tooltip(rowHint)
         .on_click(() => run("pane.focus", { pane: a.pane }))
         .when(Boolean(pic), el => el.child(div().id(`agent-fold-${a.address}`)
           .when(subs.length > 0, el => el.on_click((_e, cx) => {
@@ -376,11 +389,11 @@ export default class Agents extends View {
         .child(h_flex().flex_1().min_w(0).gap(5).items_center()
           .child(div().min_w(0).max_w(full && more ? 120 : 200).truncate().text_color(idle ? t.muted : t.foreground).child(name))
           .when(full && Boolean(more), el => el.child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(`\u00b7 ${more}`))))
-        .when(Boolean(machine), el => el.child(div().text_size(10).text_color(t.dim).child(machine)))
+        .when(Boolean(machine) && (!byMachine || isPinned), el => el.child(div().max_w(55).truncate().text_size(10).text_color(t.dim).child(machine)))
         .when(subs.length > 0, el => el.child(fold(a, subs)))
         .when(this.hovered === a.address, el => el.child(pin))
-        .when(this.hovered !== a.address && Boolean(when), el => el.child(div().flex_none().text_size(11).text_color(t.dim).child(duration(now - when))))
-        .child(this.status(t, a, byPriority && !isPinned));
+        .when(this.hovered !== a.address && (Boolean(elapsed) || Boolean(when)), el => el.child(div().flex_none().text_size(10).text_color(elapsed?.status==="blocked"?t.blocked:t.dim).child(elapsed?observedDuration(elapsed,now):duration(Math.max(0,now-when)))))
+        .child(this.status(t, inheritedBlocked ? {status:"blocked"} : a, byPriority && !isPinned));
     };
 
     // Groups in list order: spaces (grouped) or priority sections. Agents of a
@@ -388,15 +401,17 @@ export default class Agents extends View {
     const groups = pinned.length ? [{ id: "pinned", label: "Pinned", status: null, members: pinned }] : [];
     for (const a of rest) {
       const r = rankOf(a) || RANK.idle;
-      const id = byPriority ? `sec-${r}` : `sp-${a.space}`;
+      const machine = machineName(a,spaceById);
+      const id = byPriority ? `sec-${r}` : byMachine ? `machine-${JSON.stringify(machine)}` : `sp-${a.space}`;
       if (groups.at(-1)?.id === id) groups.at(-1).members.push(a);
-      else groups.push({ id, label: byPriority ? SECTION[r] : a.space_name || "", status: byPriority ? SECTION_STATUS[r] : null, members: [a] });
+      else groups.push({ id, label: byPriority ? SECTION[r] : byMachine ? machine ?? "This computer" : a.space_name || "", status: byPriority ? SECTION_STATUS[r] : null, members: [a] });
     }
 
     // A group's header; it folds the group. Folded, it says how many and the most urgent state.
     const header = (g) => {
       const open = !this.folded.has(g.id);
-      const top = g.members.reduce((m, a) => ((RANK[a.status] ?? 0) > (RANK[m] ?? 0) ? a.status : m), null);
+      const stats = groupActivity(g.members,this.snapshot);
+      const top = stats.blocked ? "blocked" : stats.working ? "working" : g.members.reduce((m, a) => ((RANK[a.status] ?? 0) > (RANK[m] ?? 0) ? a.status : m), null);
       return h_flex()
         .id(g.id)
         .px(8)
@@ -415,7 +430,10 @@ export default class Agents extends View {
         })
         .child(div().truncate().text_color(t[g.status] ?? t.dim).child(g.label))
         .child(div().text_color(t.dim).child(String(g.members.length)))
+        .tooltip(`${g.label} · ${stats.total} agents including subagents · ${stats.working} working · ${stats.blocked} need you`)
         .child(div().flex_1())
+        .when(!byPriority && stats.blocked > 0, el => el.child(div().flex_none().text_color(t.blocked).child(`!${stats.blocked}`)))
+        .when(!byPriority && stats.working > 0, el => el.child(div().flex_none().text_color(t.working).child(`▶${stats.working}`)))
         .when(!open, (el) => el
           .when(!byPriority && top && top !== "idle", (el) => el.child(this.status(t, { status: top }, true)))
           .child(svg("mods/workspace-chrome/chevron-right.svg").size(11).flex_none().text_color(t.dim)));
@@ -451,7 +469,7 @@ export default class Agents extends View {
                 .text_size(11)
                 .text_color(t.dim)
                 .hover((s) => s.text_color(t.foreground))
-                .on_click(() => openOverlay({ mod: "jec-agents", kind: "popup", width: 200, height: 140, props: { sortMenu: true } }))
+                .on_click(() => openOverlay({ mod: "jec-agents", kind: "popup", width: 220, height: 170, props: { sortMenu: true } }))
                 .tooltip(`Sort agents: ${sort.label}`)
                 .child(svg(`mods/workspace-chrome/${sort.icon}.svg`).size(14)),
             ),
