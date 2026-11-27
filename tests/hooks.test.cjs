@@ -64,7 +64,7 @@ test("install preserves existing hooks and is idempotent", () => {
     assert.equal(count, 1);
   }
   assert.equal(merge(old, "node hook.cjs"), false);
-  assert.equal(commandFor("C:\\Users\\Example Name\\hook.cjs", "win32", "C:\\Program Files\\nodejs\\node.exe"), '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\Example Name\\hook.cjs"');
+  assert.equal(commandFor("C:\\Users\\Example Name\\hook.cjs", "win32", "C:\\Program Files\\nodejs\\node.exe"), "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::In.ReadToEnd() | & 'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\Example Name\\hook.cjs'; exit $LASTEXITCODE");
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "jec-hooks-"));
   try {
     const target = path.join(home, "hooks.json");
@@ -108,4 +108,22 @@ test("migration replaces only the exact legacy JEC hook and does not duplicate i
   assert.deepEqual(config.hooks.Stop[0].hooks.map(h=>h.command),[newCommand,"unrelated"]);
   assert.equal(config.hooks.Stop.length,1);
   assert.equal(merge(config,newCommand,oldCommand),false);
+});
+
+test("PowerShell launches the actual Windows hook and forwards the JSON on stdin", {skip: process.platform !== "win32"}, () => {
+  const { spawnSync } = require("node:child_process");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "jec hook test "));
+  try {
+    const hook = path.join(home, "test-hook.cjs");
+    fs.writeFileSync(hook, "const fs=require('node:fs');const input=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(input.prompt);");
+    const command = commandFor(hook);
+    for (const shell of ["powershell.exe","pwsh.exe"]) {
+      const result = spawnSync(shell,["-NoProfile","-NonInteractive","-Command",command],{
+        input:JSON.stringify({prompt:"sesión"}),encoding:"utf8",timeout:15000,windowsHide:true
+      });
+      if (shell==="pwsh.exe" && result.error?.code==="ENOENT") continue;
+      assert.equal(result.status,0,result.stderr || String(result.error));
+      assert.equal(result.stdout,"sesión");
+    }
+  } finally { fs.rmSync(home,{recursive:true,force:true}); }
 });
