@@ -65,7 +65,7 @@ const reasons = {
 export async function identify(target) {
   if (!validTarget(target)) return null;
   const record = await terminalRecord(target).catch(() => null);
-  if (!record) return null;
+  if (!record) return pending("Esperando que Herdr confirme la terminal activa de OpenCode.");
   const active = await snapshot(target);
   if (!active) return pending("Esperando el plugin JEC de OpenCode. Reiniciá OpenCode desde Herdr y comprobá /plugins.", status(record));
   if (!active.id) return pending(reasons[active.reason] ?? "Esperando la sesión activa de OpenCode.", status(record));

@@ -2,7 +2,9 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.9 (integración de OpenCode v2)
+## jec-chat v0.10 (estabilidad de Codex y OpenCode v2)
+
+La v0.10 mantiene el adaptador común y añade recuperación automática de registro OpenCode, invalidación de acciones al cambiar la generación o el archivo de sesión, y envío habilitado sólo cuando OpenCode y Herdr confirman que está listo. Los borradores siguen en memoria por conversación; no se añade almacenamiento persistente.
 
 En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. **La vista Chat conserva el marco, el icono, la ruta y el encabezado de 30 px de Herdr**; los botones de sesión y actualización quedan dentro de una fila secundaria compacta. La ventana anterior del chat aún puede abrirse desde la paleta.
 
@@ -19,10 +21,10 @@ En el layout personal `jec-chat`, las terminales locales de Codex muestran un bo
 
 La vista compartida usa el contrato de `mods/jec-chat/providers/index.js` para identificar la sesión, leer el historial, enviar, detener y mostrar diálogos. La detección de programa es independiente de la habilitación del proveedor. La identidad incluye máquina, terminal, proveedor y sesión.
 
-| Agente | Estado de v0.8 |
+| Agente | Estado de v0.10 |
 | --- | --- |
 | Codex local | Proveedor activo, conserva el comportamiento validado de v0.7 |
-| OpenCode 2.x | Proveedor local experimental, registro de la TUI activa e interacción vía hc |
+| OpenCode 2.x | Proveedor local probado por el usuario; registro de la TUI activa e interacción vía hc |
 | Pi / Gentle Shell | Detectado, adaptador de sesión todavía pendiente |
 | Máquinas remotas | Identidad y capacidades contempladas, lectura/envío deshabilitados |
 
@@ -38,7 +40,7 @@ El instalador incorpora un plugin local de OpenCode v2, sin modificar sus archiv
 
 El plugin publica únicamente la sesión visible en la TUI, con un snapshot local acotado a las últimas 80 filas en `~/.config/herdr-app/data/jec-chat-opencode/<terminal>.json`. Contiene texto visible, ID y estado; excluye razonamiento, inputs/outputs de herramientas, adjuntos y metadatos. Se reemplaza aproximadamente cada segundo, se elimina al desactivar el plugin en forma normal y deja de ser válido después de 6,5 s sin actualizaciones. Un cierre abrupto puede dejar el archivo vencido en disco; se puede eliminar manualmente. No se expone un puerto, no se abre otro agente ni se lee una base de datos por fecha.
 
-**Validación:** pruebas unitarias de la API simulada y del proveedor, pendiente comprobar el plugin en OpenCode/Herdr reales en Windows. No se promete compatibilidad con OpenCode 1.x ni con remotos en esta versión.
+**Validación:** el usuario confirmó que Chat funciona en OpenCode. Las pruebas de regresión de v0.10 y la validación detallada de envío, interrupción y recuperación en la GUI real son independientes. No se promete compatibilidad con OpenCode 1.x ni con remotos en esta versión.
 
 ### Instalacion en Windows (PowerShell)
 

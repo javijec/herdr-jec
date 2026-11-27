@@ -9,12 +9,12 @@
   },
   "palette": [
     {
-      "title": "JEC Chat: ver conversacion de Codex",
+      "title": "JEC Chat: ver conversación del agente",
       "command": "mod.open",
       "args": {
         "name": "jec-chat"
       },
-      "words": "chat codex transcript sesion historial"
+      "words": "chat codex opencode transcript sesion historial"
     }
   ]
 }

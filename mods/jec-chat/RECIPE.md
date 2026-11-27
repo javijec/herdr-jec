@@ -1,4 +1,6 @@
-# jec-chat v0.9 — alcance y contrato
+# jec-chat v0.10 — alcance y contrato
+
+La recuperación de registros de proveedores sin descubrimiento permanece en espera y reintenta mientras Chat está visible. Las acciones en curso comparan ID y generación/archivo de registro; el borrador conserva su clave por conversación. OpenCode no usa el estado del core como sustituto de un estado combinado desconocido para habilitar el envío.
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 

@@ -99,3 +99,19 @@ test("OpenCode interrupt and permission preview stay restricted to matching sess
   assert.equal(await p.blockedPreview(target,session),"Permission request");
   assert.ok(calls.every(c=>!["send","keys","kill"].includes(c[0])));
 });
+
+test("temporary loss of Herdr registration remains pending and recovers without changing terminals",async()=>{
+  const p=await provider();
+  let active=fixture(), live=false;
+  p.setMocks({readTextFile:()=>JSON.stringify(active),hc:()=>live?{code:0,stdout:JSON.stringify({state:"live",address:target.terminal,status:"idle"})}:{code:1,stdout:""}});
+  const waiting=await p.identify(target);
+  assert.equal(waiting.pending,true);
+  assert.equal(waiting.id,null);
+  assert.equal(waiting.status,null);
+  live=true;
+  assert.equal((await p.identify(target)).session.id,id);
+  active.at=Date.now()-7000;
+  assert.equal((await p.identify(target)).pending,true);
+  active=fixture();
+  assert.equal((await p.identify(target)).session.id,id);
+});

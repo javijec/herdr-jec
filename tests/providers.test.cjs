@@ -109,3 +109,16 @@ test("OpenCode adapter uses its own direct registration, no discovery or Codex f
   await provider.send(target,session,"hola");
   assert.deepEqual(calls,[["opencode.identify",target],["opencode.send",target,session,"hola"]]);
 });
+
+test("action identity changes with the live registration, draft identity stays with the conversation", async()=>{
+  const {registry}=await load();
+  const target=local("opencode"), provider=registry.providerFor(target);
+  const a={id:"ses_123",generation:"first"}, b={...a,generation:"second"};
+  assert.equal(registry.sameActiveSession(a,{...a}),true);
+  assert.equal(registry.sameActiveSession(a,b),false);
+  assert.equal(registry.sameActiveSession(a,null),false);
+  assert.equal(registry.sameActiveSession(null,null),false);
+  assert.equal(registry.sameActiveSession({id:"id",file:"a"},{id:"id",file:"b"}),false);
+  assert.equal(registry.sessionKey(target,provider,a),registry.sessionKey(target,provider,b));
+  assert.notEqual(registry.sessionKey(target,provider,a),registry.sessionKey(target,provider,{...a,id:"ses_other"}));
+});

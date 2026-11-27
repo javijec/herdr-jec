@@ -44,6 +44,12 @@ export function sessionKey(target, provider, session) {
   if (!target?.terminal || !provider?.id || !session?.id) return null;
   return JSON.stringify([targetMachine(target.terminal, target.machine), target.terminal, provider.id, session.id]);
 }
+// Drafts belong to a conversation; in-flight actions belong to a live registration.
+export function sameActiveSession(a, b) {
+  return Boolean(a?.id && b?.id && a.id === b.id
+    && (a.generation ?? null) === (b.generation ?? null)
+    && (a.file ?? null) === (b.file ?? null));
+}
 export function allowsAction(target, provider, session, registered, action) {
   return Boolean(registered && session?.id && supportsChat(target)
     && provider?.id === target.providerId && provider.capabilities?.[action] === true

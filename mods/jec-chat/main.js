@@ -2,7 +2,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle, TextareaState, Textarea } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
-import { providerFor, providerName, sessionKey, allowsAction } from "./providers/index.js";
+import { providerFor, providerName, sessionKey, sameActiveSession, allowsAction } from "./providers/index.js";
 import { supportsChat } from "./provider-catalog.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
@@ -73,8 +73,8 @@ export default class JecChat extends View {
     // Older bridge versions without these flags keep the button as fallback.
     this.composer.on("submit", (e, cx) => {
       if (e?.shift !== false || e?.secondary === true) return;
-      if (this.closed || this.sending || this.interrupting || !allowsAction(this.target, this.provider, this.selected, this.registered, "interrupt")) return;
-      if (["working", "blocked"].includes(this.agentState())) return;
+      if (this.closed || this.sending || this.interrupting || !allowsAction(this.target, this.provider, this.selected, this.registered, "send")) return;
+      if (!this.canSend()) return;
       // The underlying textarea inserts a newline before emitting submit.
       // Remove only that newline at the current caret, not existing lines.
       try {
@@ -145,7 +145,10 @@ export default class JecChat extends View {
           if (seq !== this.seq || this.closed) return;
           if (direct) { this.acceptRegistration(direct); return; }
         }
-        if (!provider.capabilities.discovery) return;
+        if (!provider.capabilities.discovery) {
+          this.acceptRegistration({pending:true,reason:"Esperando el registro de la sesión activa."});
+          return;
+        }
         const result = await provider.list(target);
         if (seq !== this.seq || this.closed) return;
         this.sessions = result.sessions ?? []; this.more = Boolean(result.limited || result.total > this.sessions.length);
@@ -157,7 +160,12 @@ export default class JecChat extends View {
             this.choose(match.session, cx);
           }
         }
-      } catch (e) { if (seq === this.seq) this.error = String(e?.message ?? e); }
+      } catch (e) {
+        if (seq === this.seq && !this.closed) {
+          if (!provider.capabilities.discovery) this.acceptRegistration({pending:true,reason:"No se pudo consultar el agente. Reintentando…"});
+          else this.error = String(e?.message ?? e);
+        }
+      }
       finally { if (seq === this.seq) { this.loading = false; cx.notify(); } }
     });
   }
@@ -167,13 +175,19 @@ export default class JecChat extends View {
     this.pendingRegistration = direct.pending ? (direct.id ?? "pending") : null;
     this.pendingReason = direct.pending ? direct.reason ?? null : null;
     this.sessions = []; this.more = false;
+    const previousSession = this.selected;
     this.selected = direct.session ?? null;
+    if (!sameActiveSession(previousSession, this.selected)) {
+      this.dialog = null; this.waitingFor = null; this.sendNotice = null; this.sendError = null;
+    }
     this.bindDraft(sessionKey(this.target, this.provider, this.selected));
     this.matchMethod = direct.method ?? "registro " + providerName(this.target, this.provider);
     const messages = direct.data?.messages ?? [];
     const total = direct.data?.total ?? messages.length;
     const last = messages[messages.length - 1], previous = this.messages[this.messages.length - 1];
-    const changed = total !== this.total || last?.time !== previous?.time || last?.text !== previous?.text;
+    const changed = !sameActiveSession(previousSession, this.selected)
+      || total !== this.total || messages.length !== this.messages.length
+      || last?.time !== previous?.time || last?.text !== previous?.text;
     this.messages = messages; this.total = total;
     this.stale = Boolean(direct.data?.truncated);
     this.error = null;
@@ -221,7 +235,9 @@ export default class JecChat extends View {
         const direct = await provider.identify(target);
         if (this.closed || seq !== this.seq || readSeq !== this.readSeq) return;
         if (direct) this.acceptRegistration(direct);
-        else {
+        else if (!provider.capabilities.discovery) {
+          this.acceptRegistration({pending:true,reason:"Esperando el registro de la sesión activa."});
+        } else {
           // SessionEnd removed the label; do not show the ended session.
           this.registered = false; this.pendingRegistration = null;
           this.bindDraft(null);
@@ -229,7 +245,10 @@ export default class JecChat extends View {
           this.matchMethod = null; this.sessions = [];
         }
       } catch (e) {
-        if (seq === this.seq && readSeq === this.readSeq) this.error = String(e?.message ?? e);
+        if (seq === this.seq && readSeq === this.readSeq && !this.closed) {
+          if (!provider.capabilities.discovery) this.acceptRegistration({pending:true,reason:"No se pudo consultar el agente. Reintentando…"});
+          else this.error = String(e?.message ?? e);
+        }
       } finally {
         if (seq === this.seq && readSeq === this.readSeq) { this.reading = false; cx.notify(); }
       }
@@ -243,10 +262,17 @@ export default class JecChat extends View {
     this.sendError = null; this.sendNotice = null; this.waitingFor = null; this.dialog = null;
   }
   agentState(target = this.target) {
+    // Direct-only providers can require both the TUI and core to agree.
+    if (this.registered && this.provider?.capabilities.discovery === false) return this.coreStatus;
     return this.coreStatus ?? this.provider?.status(terminals().find(x => x.address === target?.terminal)) ?? null;
   }
+  canSend(target = this.target) {
+    const state = this.agentState(target);
+    if (this.provider?.capabilities.discovery === false) return state === "idle" || state === "done";
+    return state !== "working" && state !== "blocked";
+  }
   send(cx) {
-    if (this.closed || this.sending || this.interrupting || this.loading || !allowsAction(this.target, this.provider, this.selected, this.registered, "send")) return;
+    if (this.closed || this.sending || this.interrupting || this.loading || !allowsAction(this.target, this.provider, this.selected, this.registered, "send") || !this.canSend()) return;
     const target = this.target, provider = this.provider, session = this.selected, key = this.draftKey, seq = this.seq;
     const prompt = this.composer.value(), baseline = this.total;
     if (!key || !prompt.trim()) {
@@ -261,7 +287,7 @@ export default class JecChat extends View {
       try {
         const sent = await provider.send(target, session, prompt, current);
         // Never erase edits or another session's draft made during the send.
-        if (this.drafts.get(key) === prompt) this.drafts.delete(key);
+        if (current() && this.drafts.get(key) === prompt) this.drafts.delete(key);
         if (current()) {
           if (this.composer.value() === prompt) {
             this.composer.set_value(""); this.draft = "";
@@ -282,7 +308,7 @@ export default class JecChat extends View {
     });
   }
   currentAction(target, session, seq) {
-    if (this.closed || this.seq !== seq || !this.registered || this.selected?.id !== session.id
+    if (this.closed || this.seq !== seq || !this.registered || !sameActiveSession(this.selected, session)
         || this.target?.terminal !== target.terminal || this.target?.providerId !== target.providerId
         || this.target?.machine !== target.machine) return false;
     if (!this.embedded) return true;
@@ -291,7 +317,7 @@ export default class JecChat extends View {
       && live?.providerId === target.providerId && live?.machine === target.machine;
   }
   stop(cx) {
-    if (this.closed || this.sending || this.interrupting || !this.registered || !this.selected) return;
+    if (this.closed || this.sending || this.interrupting || !allowsAction(this.target, this.provider, this.selected, this.registered, "interrupt")) return;
     const target = this.target, provider = this.provider, session = this.selected, seq = this.seq;
     const current = () => this.currentAction(target, session, seq);
     if (!current()) return;
@@ -334,7 +360,7 @@ export default class JecChat extends View {
     const state = this.agentState(target), name = providerName(target, this.provider);
     // Never let a stale presentation status or delayed change event prevent
     // the click; sendPrompt performs a fresh, authoritative idle check.
-    const ready = !this.loading && !this.sending && !this.interrupting && state !== "working" && state !== "blocked";
+    const ready = !this.loading && !this.sending && !this.interrupting && this.canSend(target);
     const enabled = ready && Boolean(this.composer.value().trim());
     const status = this.interrupting ? "Interrumpiendo…" : this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención"
       : state === "working" ? name + " está trabajando" : (state === "idle" || state === "done") ? name + " listo"
