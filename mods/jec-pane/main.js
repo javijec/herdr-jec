@@ -1,4 +1,4 @@
-// JEC Pane: stock Herdr pane header with one local Codex Chat action.
+// JEC Pane: stock Herdr pane header with a capability-gated Chat action.
 // The stock mods/pane and main layout remain unchanged.
 // A pane's header, for layouts that frame their panes:
 //   { "tab": "active", "pane": { "header": { "content": { "mod": "pane" } } } }
@@ -9,6 +9,7 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { panes, props, run, theme, home, layout, spaces, setShared } from "herdr";
+import { detectAgent, supportsChat } from "./provider-catalog.js";
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -31,16 +32,12 @@ function icon(p, size, color) {
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
 }
 
-function isCodex(p) {
-  // Rely on Herdr's program metadata, not on the title a user or agent can edit.
-  const program = p?.program ?? {};
-  return [program.key, program.name].some(value =>
-    typeof value === "string" && /(^|[^a-z])codex([^a-z]|$)/i.test(value));
-}
-
-function localCodex(p) {
+function chatAvailable(p) {
   const space = spaces().find(s => s.tabs?.some(tab => tab.id === p?.tab));
-  return Boolean(p?.terminal && p?.cwd && space && !space.machine && isCodex(p));
+  return Boolean(space && supportsChat({
+    terminal: p?.terminal, cwd: p?.cwd, machine: space.machine,
+    providerId: detectAgent(p?.program, p?.app)
+  }));
 }
 
 function folder(cwd) {
@@ -114,7 +111,7 @@ export default class Pane extends View {
       .when(st === "working", el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
       .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(t.blocked + "26").text_size(10.5).font_semibold().text_color(t.blocked).child("Needs you")))
       .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(t.done)))
-      .when(localCodex(p), el => el.child(this.chatButton(t, p)))
+      .when(chatAvailable(p), el => el.child(this.chatButton(t, p)))
       .when(this.hovered, el => el
         .child(this.button(t, `ph-r-${pane}`, "split-right", "pane.split", { direction: "right", pane }))
         .child(this.button(t, `ph-d-${pane}`, "split-down", "pane.split", { direction: "down", pane }))
