@@ -13,8 +13,17 @@ function Backup-Jec([string]$Source,[string]$Name) {
   Write-Host "Desactivado: $Source (respaldo: $dest)"
 }
 if (-not (Get-Command herdr-app -ErrorAction SilentlyContinue)) { throw 'herdr-app no esta en PATH. No se desactivo nada.' }
-& herdr-app do layout.switch --name main
-if ($LASTEXITCODE -ne 0) { throw 'Abri Herdr y selecciona el layout oficial main antes de reintentar.' }
+# Herdr's JSON reply is authoritative: some Windows launchers leave a stale
+# LASTEXITCODE or return a nonzero code even after a successful command.
+$layoutOutput = & herdr-app do layout.switch --name main | Out-String
+$layoutExit = $LASTEXITCODE
+$layoutReply = $null
+try { $layoutReply = $layoutOutput | ConvertFrom-Json -ErrorAction Stop } catch { }
+if ($layoutReply -and ($layoutReply.ok -is [bool]) -and $layoutReply.ok -and -not $layoutReply.error) {
+  Write-Host 'Layout oficial main activado.'
+} else {
+  throw "No se pudo activar main (exit=$layoutExit, respuesta=$layoutOutput). Abri Herdr y reintenta."
+}
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js es necesario para retirar solo los hooks JEC de Codex. No se movieron los mods.' }
 $scripts = @($appHomes | ForEach-Object { Join-Path $_ 'mods/jec-chat/providers/session-hook.cjs' })
 & node (Join-Path $PSScriptRoot 'scripts/disable-chat-hooks.cjs') @scripts

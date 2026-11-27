@@ -6,6 +6,8 @@ $appHome = if ($env:HERDR_APP_HOME) { $env:HERDR_APP_HOME } else { Join-Path $HO
 $source = Join-Path $PSScriptRoot 'mods/jec-machines'
 $destination = Join-Path $appHome 'mods/jec-machines'
 if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
+  # Reset inherited exit status before running the CLI check.
+  $global:LASTEXITCODE = 0
   & herdr-app check $source
   if ($LASTEXITCODE -ne 0) { throw 'Machines no paso herdr-app check.' }
 }

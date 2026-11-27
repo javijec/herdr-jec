@@ -29,3 +29,12 @@ test("default installer retires chat before installing Machines; no native build
  assert.match(d,/layout\.switch --name main/);assert.match(d,/disable-chat-hooks\.cjs/);
  assert.doesNotMatch(d,/terminal\.kill|pane\.close/);
 });
+
+test("layout switch requires affirmative JSON even when Windows exit code is stale",()=>{
+ const d=fs.readFileSync(path.join(__dirname,"../disable-chat.ps1"),"utf8");
+ assert.match(d,/layoutOutput = & herdr-app do layout\.switch --name main \| Out-String/);
+ assert.match(d,/ConvertFrom-Json -ErrorAction Stop/);
+ assert.match(d,/\$layoutReply\.ok -is \[bool\]/);
+ assert.match(d,/\$layoutReply\.ok -and -not \$layoutReply\.error/);
+ assert.doesNotMatch(d,/layout\.switch --name main\s*\nif \(\$LASTEXITCODE -ne 0\)/);
+});
