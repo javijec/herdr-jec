@@ -57,6 +57,12 @@ node scripts/verify.cjs
 
 Con la referencia oficial materializada, usar `node scripts/verify.cjs --require-upstream` para exigir la comparación exacta de los cuatro mods y el layout con upstream. Tras editar `shared/agent-summary.js`, ejecutar `node scripts/sync-shared.cjs` antes de verificar.
 
+## v0.6 — Métricas de máquina
+
+Workspace Status muestra CPU, RAM, disco del sistema y temperatura de CPU (si hay un sensor identificado) del espacio activo. Usa `exec` oficial con el destino `on` de Herdr. Linux: /proc/stat (muestra de un segundo), MemAvailable, df de / y sensores térmicos identificados. Windows: CIM Win32_Processor, Win32_OperatingSystem y Win32_LogicalDisk del disco del sistema; temperatura no disponible. macOS y otros sistemas todavía no soportados. Las cifras de disco no representan todos los volúmenes. No instala servicios, usa credenciales existentes de Herdr y no añade paneles.
+
+Sólo consulta la máquina activa cuando su layout está listo y la ventana visible y activa. Una consulta a la vez, cada 15 segundos tras un resultado; reintento de fallos tras 60 segundos. El timer comprueba cada 5 segundos, sin trabajo en herdr-app check. No muestra datos antiguos tras 45 segundos; la temperatura no disponible se omite y el tooltip explica los datos ausentes. En máquinas remotas de plataforma desconocida intenta Linux y después Windows, con timeout por comando. Las métricas se guardan sólo en memoria.
+
 ## Desarrollo
 
 La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Para Workspace Chrome usar `node scripts/derive-workspace-chrome.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.

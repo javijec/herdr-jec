@@ -41,6 +41,24 @@ changes.push(...[
     ".child(h_flex().gap(6).items_center().flex_none().tooltip(summaryLabel(summary)).child(div().size(6).rounded(3).bg(summary.working ? t.working : t.dim)).child(`${summary.total} ${summary.total === 1 ? \"agent\" : \"agents\"}`)"
   ]
 ]);
+changes.push(...[
+  [
+    "import { spaces, agents, terminals, machines, theme, run, window, keys } from \"herdr\";",
+    "import { spaces, agents, terminals, machines, theme, run, window, keys, exec, checking } from \"herdr\";\nimport { probe, describeMetrics, REFRESH_MS, RETRY_MS } from \"./machine-metrics.js\";"
+  ],
+  [
+    "export default class WorkspaceStatus extends View {",
+    "export default class WorkspaceStatus extends View {\n  init(_props, cx) {\n    this.metrics = new Map();\n    this.metricsBusy = false;\n    if (checking()) return;\n    // One job at a time, active visible machine only. Never poll from render().\n    this.refreshMetrics(cx);\n    cx.timer.every(5000, cx => this.refreshMetrics(cx));\n  }\n\n  refreshMetrics(cx) {\n    if (checking() || !window()?.visible || !window()?.active || this.metricsBusy) return;\n    const space = spaces().find(s => s.active);\n    if (!space) return;\n    const on = space.machine ?? null;\n    if (machines().find(m => m.name === on)?.layout !== \"ready\") return;\n    const now = Date.now();\n    const prev = this.metrics.get(on);\n    if (prev && now < prev.next) return;\n    this.metricsBusy = true;\n    cx.spawn(async cx => {\n      try {\n        const platform = on === null ? window()?.platform : null;\n        const preferred = platform === \"windows\" || platform === \"linux\" ? platform : (prev?.platform ?? null);\n        const result = await probe(exec, on, preferred);\n        const at = Date.now();\n        this.metrics.set(on, result\n          ? { ...result, at, next: at + REFRESH_MS }\n          : { failed: true, at, next: at + RETRY_MS });\n      } finally {\n        this.metricsBusy = false;\n        cx.notify();\n      }\n    });\n  }\n"
+  ],
+  [
+    "    const needs = summary.blocked;",
+    "    const needs = summary.blocked;\n    const machineMetrics = describeMetrics(this.metrics?.get(space?.machine ?? null), Date.now(), context.machineName);"
+  ],
+  [
+    "      .child(div().flex_1())\n      .child(div().id(\"palette\")",
+    "      .child(div().flex_1().min_w(0))\n      .when(Boolean(space) && context.state === \"ready\", el => el.child(div().id(\"jec-metrics\").min_w(0).max_w(260).truncate().text_color(machineMetrics.available ? t.muted : t.dim).tooltip(machineMetrics.hint).child(machineMetrics.text)))\n      .child(div().id(\"palette\")"
+  ]
+]);
 const prefix="// Based on official Herdr Workspace Status @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa; Apache-2.0 (LICENSE.herdr).\n// JEC v0.3: active machine availability and workspace context.\n";
 function derive(source){
  let s=source.replace(/\r\n/g,"\n");

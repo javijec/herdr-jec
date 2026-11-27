@@ -14,7 +14,7 @@ test("both views use an identical agent summary implementation",async()=>{
 test("profile names match layout and installed mod directories",()=>{
  const p=JSON.parse(read("profile.json")),l=JSON.parse(read("layouts/jec.json"));
  function find(n,id){return n.id===id?n:(n.children??[]).map(c=>find(c,id)).find(Boolean)}
- assert.equal(p.version,"0.5.0");
+ assert.equal(p.version,"0.6.0");
  for(const e of p.mods){
   assert.ok(fs.existsSync(path.join(root,"mods",e.id,"mod.json")));
   for(const b of e.blocks)assert.equal(find(l,b).content.mod,e.id);

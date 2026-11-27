@@ -24,5 +24,7 @@ test("official status bar baseline and exact delta",{skip:!fs.existsSync(path.jo
 test("status bar preserves native command palette and uses official machine settings",()=>{
  const s=read("mods/jec-workspace-status/main.js");
  assert.match(s,/run\("app.palette"\)/);assert.match(s,/run\("app.settings", \{ section: "machines" \}\)/);
- assert.doesNotMatch(s,/cx\.timer|\bexec\(|\bhc\(/);
+ assert.match(s,/if \(checking\(\)\) return;/);
+ assert.match(s,/cx\.timer\.every\(5000/);
+ assert.doesNotMatch(s,/\bhc\(/);
 });
