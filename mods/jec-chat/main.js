@@ -2,7 +2,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle, TextareaState, Textarea } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
-import { listSessions, readSession, resolveCurrentSession, registeredSession, sendPrompt, terminalStatus } from "./providers/codex.js";
+import { listSessions, readSession, resolveCurrentSession, registeredSession, sendPrompt, terminalStatus, interruptPrompt, blockedScreen } from "./providers/codex.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -57,20 +57,44 @@ export default class JecChat extends View {
     this.composer = TextareaState.new({ placeholder: "Escribí un mensaje a Codex…", rows: 3 });
     this.draftKey = null; this.drafts = new Map();
     this.draft = ""; this.sending = false; this.sendError = null; this.sendNotice = null;
+    this.waitingFor = null; this.interrupting = false;
+    this.dialog = null; this.dialogLoading = false; this.lastPoll = 0;
     this.composer.on("change", (_e, cx) => {
       this.draft = this.composer.value();
       if (this.draftKey) {
         this.drafts.set(this.draftKey, this.draft);
         if (this.drafts.size > 30) this.drafts.delete(this.drafts.keys().next().value);
       }
-      this.sendNotice = null; cx.notify();
+      cx.notify();
+    });
+    // The native textarea emits submit with explicit Shift/secondary flags.
+    // Older bridge versions without these flags keep the button as fallback.
+    this.composer.on("submit", (e, cx) => {
+      if (e?.shift !== false || e?.secondary === true) return;
+      if (this.closed || this.sending || this.interrupting || !this.registered || !this.selected) return;
+      if (["working", "blocked"].includes(this.agentState())) return;
+      // The underlying textarea inserts a newline before emitting submit.
+      // Remove only that newline at the current caret, not existing lines.
+      try {
+        const value = this.composer.value(), range = this.composer.selected_range();
+        if (range.start === range.end && range.start > 0 && value[range.start - 1] === "\n") {
+          const pos = range.start - 1;
+          this.composer.set_value(value.slice(0, pos) + value.slice(pos + 1));
+          this.composer.set_selected_range({ start: pos, end: pos });
+        }
+      } catch { /* Button remains available if the selection API is older. */ }
+      if (this.composer.value().trim()) this.send(cx);
     });
     this.closed = false; this.seq = 0; this.readSeq = 0;
     if (this.target.terminal && this.target.cwd && !this.target.machine && this.target.isCodex) this.scan(cx);
     if (this.embedded) cx.timer.every(400, cx => this.syncTarget(cx));
-    cx.timer.every(4000, (cx) => {
-      if (!this.closed && (this.selected || this.pendingRegistration) && !this.reading && !this.loading && appWindow()?.visible !== false
-          && (!this.embedded || activeView(layout()) === "jec-chat-view")) this.refresh(cx);
+    cx.timer.every(1000, (cx) => {
+      if (this.closed || (!this.selected && !this.pendingRegistration) || this.reading || this.loading || appWindow()?.visible === false
+          || (this.embedded && activeView(layout()) !== "jec-chat-view")) return;
+      const state = this.agentState();
+      const busy = this.sending || this.waitingFor || this.interrupting || state === "working" || state === "blocked";
+      const interval = busy ? 1000 : 2500;
+      if (Date.now() - this.lastPoll >= interval) { this.lastPoll = Date.now(); this.refresh(cx); }
     });
   }
   close() { this.closed = true; this.seq++; this.readSeq++; this.composer.release(); }
@@ -139,11 +163,23 @@ export default class JecChat extends View {
     this.selected = direct.session ?? null;
     this.bindDraft(this.selected ? this.target.terminal + "/" + this.selected.id : null);
     this.matchMethod = direct.method ?? "registro Codex";
-    this.messages = direct.data?.messages ?? [];
-    this.total = direct.data?.total ?? this.messages.length;
+    const messages = direct.data?.messages ?? [];
+    const total = direct.data?.total ?? messages.length;
+    const last = messages[messages.length - 1], previous = this.messages[this.messages.length - 1];
+    const changed = total !== this.total || last?.time !== previous?.time || last?.text !== previous?.text;
+    this.messages = messages; this.total = total;
     this.stale = Boolean(direct.data?.truncated);
     this.error = null;
-    this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
+    if (this.waitingFor && (this.waitingFor.key !== this.draftKey || this.total > this.waitingFor.total
+        || ["working", "blocked"].includes(this.coreStatus))) {
+      this.waitingFor = null; this.sendNotice = null;
+    }
+    if (this.waitingFor && Date.now() - this.waitingFor.at > 15000) {
+      this.waitingFor = null;
+      this.sendNotice = "Herdr entregó el mensaje. Si no aparece en el historial, revisá Terminal.";
+    }
+    if (this.coreStatus !== "blocked") this.dialog = null;
+    if (changed) this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
   }
   choose(session, cx) {
     this.bindDraft(null);
@@ -196,15 +232,15 @@ export default class JecChat extends View {
     this.draftKey = key;
     this.draft = key ? this.drafts.get(key) ?? "" : "";
     this.composer.set_value(this.draft);
-    this.sendError = null; this.sendNotice = null;
+    this.sendError = null; this.sendNotice = null; this.waitingFor = null; this.dialog = null;
   }
   agentState(target = this.target) {
     return this.coreStatus ?? terminalStatus(terminals().find(x => x.address === target?.terminal));
   }
   send(cx) {
-    if (this.closed || this.sending || this.loading || !this.registered || !this.selected) return;
+    if (this.closed || this.sending || this.interrupting || this.loading || !this.registered || !this.selected) return;
     const target = this.target, session = this.selected, key = this.draftKey, seq = this.seq;
-    const prompt = this.composer.value();
+    const prompt = this.composer.value(), baseline = this.total;
     if (!key || !prompt.trim()) {
       this.sendError = "Escribí un mensaje antes de enviar."; cx.notify(); return;
     }
@@ -219,20 +255,66 @@ export default class JecChat extends View {
     this.sending = true; this.sendError = null; this.sendNotice = null; cx.notify();
     cx.spawn(async cx => {
       try {
-        await sendPrompt(target, session, prompt, current);
+        const sent = await sendPrompt(target, session, prompt, current);
         // Never erase edits or another session's draft made during the send.
         if (this.drafts.get(key) === prompt) this.drafts.delete(key);
         if (current()) {
           if (this.composer.value() === prompt) {
             this.composer.set_value(""); this.draft = "";
           }
-          this.sendNotice = "Mensaje enviado · esperando respuesta";
+          if (sent?.started === true && this.total <= baseline) this.coreStatus = "working";
+          if (this.total <= baseline && !["working", "blocked"].includes(this.coreStatus)) {
+            this.waitingFor = { key, total: baseline, at: Date.now() };
+            this.sendNotice = "Mensaje entregado · esperando el historial";
+          } else { this.waitingFor = null; this.sendNotice = null; }
           this.refresh(cx);
         }
       } catch (e) {
         if (current()) this.sendError = String(e?.message ?? e);
       } finally {
         this.sending = false;
+        if (!this.closed) cx.notify();
+      }
+    });
+  }
+  currentAction(target, session, seq) {
+    if (this.closed || this.seq !== seq || !this.registered || this.selected?.id !== session.id
+        || this.target?.terminal !== target.terminal) return false;
+    if (!this.embedded) return true;
+    const live = embeddedTarget();
+    return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane;
+  }
+  stop(cx) {
+    if (this.closed || this.sending || this.interrupting || !this.registered || !this.selected) return;
+    const target = this.target, session = this.selected, seq = this.seq;
+    const current = () => this.currentAction(target, session, seq);
+    if (!current()) return;
+    this.interrupting = true; this.sendError = null; this.sendNotice = null; this.waitingFor = null; cx.notify();
+    cx.spawn(async cx => {
+      try {
+        await interruptPrompt(target, session, current);
+      } catch (e) { if (current()) this.sendError = String(e?.message ?? e); }
+      finally {
+        this.interrupting = false;
+        if (current()) this.refresh(cx);
+        if (!this.closed) cx.notify();
+      }
+    });
+  }
+  inspectDialog(cx) {
+    if (this.dialogLoading || !this.registered || !this.selected || this.closed) return;
+    const target = this.target, session = this.selected, seq = this.seq;
+    const current = () => this.currentAction(target, session, seq);
+    if (!current()) return;
+    this.dialogLoading = true; this.sendError = null; cx.notify();
+    cx.spawn(async cx => {
+      try {
+        const screen = await blockedScreen(target, session);
+        if (current()) this.dialog = screen || null;
+      } catch (e) { if (current()) this.sendError = String(e?.message ?? e); }
+      finally {
+        this.dialogLoading = false;
+        if (current()) this.refresh(cx);
         if (!this.closed) cx.notify();
       }
     });
@@ -246,9 +328,9 @@ export default class JecChat extends View {
     const state = this.agentState(target);
     // Never let a stale presentation status or delayed change event prevent
     // the click; sendPrompt performs a fresh, authoritative idle check.
-    const ready = !this.loading && !this.sending && state !== "working" && state !== "blocked";
+    const ready = !this.loading && !this.sending && !this.interrupting && state !== "working" && state !== "blocked";
     const enabled = ready && Boolean(this.composer.value().trim());
-    const status = this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención · abrí Terminal"
+    const status = this.interrupting ? "Interrumpiendo…" : this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención"
       : state === "working" ? "Codex está trabajando" : (state === "idle" || state === "done") ? "Codex listo"
       : "Estado: " + (state ?? "sin confirmar") + " · se verifica al enviar";
     return v_flex().flex_none().border_t(1).border_color(t.border).px(12).py(8).gap(6)
@@ -256,7 +338,13 @@ export default class JecChat extends View {
         .child(div().flex_1().min_w(0)
           .child(Textarea.new(this.composer).w_full().h(64).px(9).py(6).rounded(7)
             .border_1().border_color(t.input || t.border).bg(t.raised).text_color(t.foreground).text_size(13)))
-        .child(div().id("jec-send").h(32).px(12).rounded(7).flex_none().flex().items_center()
+        .child(state === "working" || this.interrupting
+          ? div().id("jec-stop").h(32).px(12).rounded(7).flex_none().flex().items_center()
+            .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground).text_size(12).font_medium()
+            .when(!this.interrupting && !this.sending, el => el.cursor_pointer().hover(x => x.opacity(0.88))
+              .on_click((_e, cx) => { cx.stop_propagation(); this.stop(cx); }))
+            .child(this.interrupting ? "Deteniendo…" : "Detener")
+          : div().id("jec-send").h(32).px(12).rounded(7).flex_none().flex().items_center()
           .font_medium().text_size(12).bg(enabled ? t.solid : t.raised)
           .text_color(enabled ? t.solid_foreground : t.dim)
           .border_1().border_color(enabled ? t.solid : t.border)
@@ -264,9 +352,17 @@ export default class JecChat extends View {
             .on_click((_e, cx) => { cx.stop_propagation(); this.send(cx); }))
           .child(this.sending ? "Enviando…" : "Enviar")))
       .child(h_flex().items_center().gap(8)
+        .when(state === "working" || this.sending || this.interrupting, el => el.child(svg("mods/workspace-chrome/spinner.svg").size(12).text_color(t.working).spin(900)))
         .child(div().text_size(11).text_color(state === "blocked" ? t.blocked : t.muted).child(status))
         .child(div().flex_1())
-        .child(div().text_size(11).text_color(t.dim).child("Enter: nueva línea")))
+        .child(div().text_size(11).text_color(t.dim).child("Enter: enviar · Shift+Enter: nueva línea")))
+      .when(state === "blocked", el => el.child(v_flex().gap(6).p(8).rounded(7).border_1().border_color(t.border)
+        .child(div().text_size(12).text_color(t.muted).child("Codex espera una decisión. Revisá el diálogo original antes de responder."))
+        .child(h_flex().gap(8)
+          .child(button(t, "jec-inspect", this.dialogLoading ? "Leyendo…" : "Ver solicitud", cx => this.inspectDialog(cx), false, true))
+          .child(button(t, "jec-resolve", "Resolver en Terminal", () => this.back(), false, true)))
+        .when(Boolean(this.dialog), box => box.child(div().max_h(160).overflow_y_scrollbar().text_size(11).text_color(t.foreground)
+          .child(TextView.markdown("jec-blocked-dialog", "```text\n" + this.dialog.replace(/```/g, "ˋˋˋ") + "\n```").raw_html(false).selectable(true))))))
       .when(Boolean(this.sendError), el => el.child(div().text_size(11).text_color(t.blocked).child(this.sendError)))
       .when(Boolean(this.sendNotice) && !this.sendError, el => el.child(div().text_size(11).text_color(t.muted).child(this.sendNotice)));
   }
