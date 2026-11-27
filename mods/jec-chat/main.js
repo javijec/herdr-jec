@@ -249,7 +249,7 @@ export default class JecChat extends View {
     const ready = !this.loading && !this.sending && state !== "working" && state !== "blocked";
     const enabled = ready && Boolean(this.composer.value().trim());
     const status = this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención · abrí Terminal"
-      : state === "working" ? "Codex está trabajando" : state === "idle" ? "Codex listo"
+      : state === "working" ? "Codex está trabajando" : (state === "idle" || state === "done") ? "Codex listo"
       : "Estado: " + (state ?? "sin confirmar") + " · se verifica al enviar";
     return v_flex().flex_none().border_t(1).border_color(t.border).px(12).py(8).gap(6)
       .child(h_flex().items_center().gap(8)
