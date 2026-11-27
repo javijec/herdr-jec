@@ -103,3 +103,49 @@ test("core status uses the explicit status before report fallback", async () => 
   assert.equal(terminalStatus({status:"IDLE"}),"idle");
   assert.equal(terminalStatus({}),null);
 });
+
+test("interrupt targets only the registered working terminal and never kills or forces", async () => {
+  const { setMocks, interruptPrompt } = await provider();
+  const target = {terminal:"t1q",isCodex:true,cwd:path.resolve(".")};
+  const session = {id:ID,file:path.resolve("rollout.jsonl"),cwd:target.cwd};
+  let record = {state:"live",status:"working",address:"t1q",labels:{"jec.chat.codex":JSON.stringify(session)}};
+  const calls = [];
+  setMocks({hc(args){
+    calls.push(args);
+    return {code:0,stdout:JSON.stringify(args[0]==="get"?record:{outcome:"stopped"})};
+  }});
+  assert.equal((await interruptPrompt(target,session)).outcome,"stopped");
+  assert.deepEqual(calls,[["get","t1q","--json"],["interrupt","t1q","--json"]]);
+  calls.length=0;
+  for (const status of ["blocked","idle","done",null]) {
+    record.status=status;
+    await assert.rejects(interruptPrompt(target,session),/ya no está trabajando/);
+  }
+  assert.ok(calls.every(c=>c[0]==="get"));
+  record.status="working";
+  await assert.rejects(interruptPrompt(target,session,()=>false),/panel activo/);
+  record.labels={};
+  await assert.rejects(interruptPrompt(target,session),/sesión cambió/);
+  assert.ok(calls.every(c=>c[0]==="get"));
+});
+test("blocked preview is read-only, validates identity before and after and hides stale dialogs", async () => {
+  const { setMocks, blockedScreen } = await provider();
+  const target={terminal:"t1q",isCodex:true,cwd:path.resolve(".")};
+  const session={id:ID,file:path.resolve("rollout.jsonl"),cwd:target.cwd};
+  let record={state:"live",address:"t1q",status:"blocked",labels:{"jec.chat.codex":JSON.stringify(session)}};
+  let resolveDuringRead=false;
+  const calls=[];
+  setMocks({hc(args){
+    calls.push(args);
+    if(args[0]==="get")return {code:0,stdout:JSON.stringify(record)};
+    if(resolveDuringRead)record.status="idle";
+    return {code:0,stdout:"  Review command?  "};
+  }});
+  assert.equal(await blockedScreen(target,session),"Review command?");
+  assert.deepEqual(calls,[["get","t1q","--json"],["read","t1q","--lines","0"],["get","t1q","--json"]]);
+  calls.length=0;
+  resolveDuringRead=true;
+  assert.equal(await blockedScreen(target,session),null);
+  assert.equal(await blockedScreen(target,session),null);
+  assert.equal(calls.filter(c=>c[0]==="read").length,1);
+});
