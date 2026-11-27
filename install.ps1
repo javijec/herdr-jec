@@ -1,6 +1,6 @@
 # Instala JEC Chat sin modificar el layout main ni los mods originales de Herdr.
 # El layout personalizado jec-chat alterna Chat/Terminal en la misma area central.
-param([switch]$SkipCodexHooks, [switch]$SkipOpenCodePlugin)
+param([switch]$SkipCodexHooks, [switch]$SkipOpenCodePlugin, [switch]$SkipPiExtension, [string[]]$PiAgentHome)
 $ErrorActionPreference = 'Stop'
 $modRoot = Join-Path $HOME '.config\herdr-app\mods'
 $layoutRoot = Join-Path $HOME '.config\herdr-app\layouts'
@@ -49,6 +49,28 @@ if (-not $SkipOpenCodePlugin) {
   Write-Host 'Reinicia OpenCode desde Herdr y revisa /plugins si solicita habilitar JEC.'
 }
 
+if (-not $SkipPiExtension) {
+  $piSource = Join-Path $PSScriptRoot 'integrations/pi/jec-chat.ts'
+  if (-not (Test-Path $piSource)) { throw 'No se encontro la extension JEC de Pi.' }
+  $piHomes = @()
+  if ($PiAgentHome) { $piHomes += $PiAgentHome }
+  else {
+    $piHomes += $(if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME '.pi/agent' })
+    $gentleHome = if ($env:GENTLE_PI_AGENT_HOME) { $env:GENTLE_PI_AGENT_HOME }
+      elseif ($env:GENTLE_SHELL_HOME) { $env:GENTLE_SHELL_HOME }
+      else { Join-Path $HOME '.gentle-shell/agent' }
+    if (Test-Path $gentleHome) { $piHomes += $gentleHome }
+    if ($env:GENTLE_SHELL_USER_PI_HOME) { $piHomes += $env:GENTLE_SHELL_USER_PI_HOME }
+  }
+  foreach ($agentHome in ($piHomes | Where-Object { $_ } | Select-Object -Unique)) {
+    $extensionDir = Join-Path $agentHome 'extensions'
+    New-Item -ItemType Directory -Path $extensionDir -Force | Out-Null
+    Copy-Item -LiteralPath $piSource -Destination (Join-Path $extensionDir 'jec-chat.ts') -Force
+    Write-Host "Extension Pi/Gentle Shell instalada: $extensionDir"
+  }
+  Write-Host 'Reinicia Pi/Gentle Shell desde Herdr (o /reload).'
+}
+
 if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
   foreach ($name in @('jec-chat', 'jec-pane')) {
     & herdr-app check (Join-Path $modRoot $name)
@@ -64,4 +86,4 @@ if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
 } else {
   Write-Warning 'herdr-app no esta en PATH. Abri Herdr y usa Ctrl+Shift+L para elegir jec-chat.'
 }
-Write-Host 'Listo. En las terminales locales de Codex y OpenCode, el boton Chat estara en su encabezado.'
+Write-Host 'Listo. En las terminales locales de Codex, OpenCode y Pi/Gentle Shell, el boton Chat estara en su encabezado.'

@@ -3,7 +3,7 @@
 export const AGENTS = Object.freeze([
   Object.freeze({ id: "codex", name: "Codex", aliases: Object.freeze(["codex", "openai-codex"]), enabled: true, remote: false }),
   Object.freeze({ id: "opencode", name: "OpenCode", aliases: Object.freeze(["opencode", "open-code", "opencode-native"]), enabled: true, remote: false }),
-  Object.freeze({ id: "pi", name: "Pi / Gentle Shell", aliases: Object.freeze(["pi", "pi-agent", "pi-coding-agent", "gentle-shell", "gentle shell"]), enabled: false, remote: false }),
+  Object.freeze({ id: "pi", name: "Pi / Gentle Shell", aliases: Object.freeze(["pi", "pi-agent", "pi-coding-agent", "gentle-shell", "gentle shell"]), enabled: true, remote: false }),
 ]);
 export function agentInfo(id) {
   return AGENTS.find(agent => agent.id === id) ?? null;

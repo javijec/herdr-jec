@@ -2,7 +2,7 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.10 (estabilidad de Codex y OpenCode v2)
+## jec-chat v0.11 (Pi / Gentle Shell experimental)
 
 La v0.10 mantiene el adaptador común y añade recuperación automática de registro OpenCode, invalidación de acciones al cambiar la generación o el archivo de sesión, y envío habilitado sólo cuando OpenCode y Herdr confirman que está listo. Los borradores siguen en memoria por conversación; no se añade almacenamiento persistente.
 
@@ -21,14 +21,28 @@ En el layout personal `jec-chat`, las terminales locales de Codex muestran un bo
 
 La vista compartida usa el contrato de `mods/jec-chat/providers/index.js` para identificar la sesión, leer el historial, enviar, detener y mostrar diálogos. La detección de programa es independiente de la habilitación del proveedor. La identidad incluye máquina, terminal, proveedor y sesión.
 
-| Agente | Estado de v0.10 |
+| Agente | Estado de v0.11 |
 | --- | --- |
 | Codex local | Proveedor activo, conserva el comportamiento validado de v0.7 |
 | OpenCode 2.x | Proveedor local probado por el usuario; registro de la TUI activa e interacción vía hc |
-| Pi / Gentle Shell | Detectado, adaptador de sesión todavía pendiente |
+| Pi / Gentle Shell | Proveedor local experimental; extensión de sesión interactiva |
 | Máquinas remotas | Identidad y capacidades contempladas, lectura/envío deshabilitados |
 
 El instalador incorpora un plugin local de OpenCode v2, sin modificar sus archivos de configuración ni los hooks de Codex. No se habilitan acciones sobre agentes sin una sesión registrada. El punto de recuperación de la versión validada es la rama `stable/v0.7`.
+
+### Pi / Gentle Shell (local, experimental)
+
+El instalador copia la extensión `integrations/pi/jec-chat.ts` al directorio de extensiones de Pi (por defecto `~/.pi/agent/extensions`) y al home aislado de Gentle Shell si existe (`~/.gentle-shell/agent/extensions` por defecto). Respeta PI_CODING_AGENT_DIR, GENTLE_PI_AGENT_HOME y GENTLE_SHELL_HOME; para otros homes se puede ejecutar `install.ps1 -PiAgentHome <ruta-al-agent-home>`. Usá `-SkipPiExtension` para omitirla.
+
+1. Reiniciá Pi/Gentle Shell desde Herdr (o /reload si ya heredó HC_TERMINAL_ID).
+2. Abrí Chat en su pane. Debe indicar registro Pi.
+3. Probá enviar un mensaje, volver a Terminal, cambiar de sesión con /new o /resume y comprobar que no se mezcla el historial.
+
+La extensión usa la API de Pi (session_start/session_shutdown, getSessionId, getBranch, isIdle) para publicar las últimas 80 filas de la rama activa, en `data/jec-chat-pi/<terminal>.json`. No lee otras sesiones ni exporta razonamiento, argumentos, resultados completos o imágenes. Sólo se publican mensajes ya registrados en la rama; el streaming por token queda pendiente. El archivo local caduca a los 6,5 s y se elimina en el cierre normal. Sólo se registra la TUI interactiva, no procesos print/RPC.
+
+Enviar y detener usan hc, con comprobación del ID, generación, estado de Pi y de Herdr; sin force ni reintentos. Los diálogos de permisos se resuelven en Terminal. No hay garantía atómica entre comprobar y ejecutar hc ni detección de todos los menús modales de Pi: cerrá cualquier menú antes de enviar. Pendiente validar en Pi/Gentle Shell reales. No incluye agentes remotos.
+
+Referencias: [Pi extensions](https://docs.pi.dev/latest/extensions), [Gentle Shell](https://github.com/Gentleman-Programming/gentle-shell).
 
 ### OpenCode v2 (local)
 

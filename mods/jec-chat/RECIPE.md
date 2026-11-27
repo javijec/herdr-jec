@@ -1,4 +1,4 @@
-# jec-chat v0.10 — alcance y contrato
+# jec-chat v0.11 — alcance y contrato
 
 La recuperación de registros de proveedores sin descubrimiento permanece en espera y reintenta mientras Chat está visible. Las acciones en curso comparan ID y generación/archivo de registro; el borrador conserva su clave por conversación. OpenCode no usa el estado del core como sustituto de un estado combinado desconocido para habilitar el envío.
 
@@ -24,7 +24,7 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 
 Las capacidades `history`, `discovery`, `send`, `interrupt`, `blockedPreview`, `approval` y `remote` controlan la exposición de acciones. La vista no importa implementaciones concretas. El adaptador Codex delega a los métodos de v0.7, conservando hooks, registro, historial y acciones. El selector manual de Codex queda disponible sólo para un agente no identificado y local; no se usa como fallback para un agente reconocido diferente.
 
-OpenCode v2 tiene un proveedor local experimental activo. Pi/Gentle Shell sigue reconocido sin adaptador. Remotos y aprobaciones estructuradas todavía no están habilitados. Para incorporar un agente, primero implementar y probar su registro de identidad y lector, luego registrar el adaptador y habilitar sus capacidades. No reutilizar el lector ni la identidad de Codex.
+OpenCode v2 tiene un proveedor local experimental activo. Pi/Gentle Shell tiene un adaptador experimental de registro directo por extensión interactiva. El contrato de acciones y la protección de identidad siguen siendo comunes; sus snapshots usan un directorio independiente. Remotos y aprobaciones estructuradas todavía no están habilitados. Para incorporar un agente, primero implementar y probar su registro de identidad y lector, luego registrar el adaptador y habilitar sus capacidades. No reutilizar el lector ni la identidad de Codex.
 
 La rama `stable/v0.7` preserva el estado validado antes de la refactorización.
 
@@ -106,3 +106,7 @@ Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo ar
 - https://github.com/herdrdev/herdr-app/blob/master/defaults/AGENTS.md
 - https://github.com/ryanrozich/herdr-agent-threads
 - https://github.com/ChmaraX/herdr-chat
+
+## Pi / Gentle Shell (v0.11)
+
+Se utiliza la extensión de Pi 1.x, con getSessionId/getCwd/getBranch e isIdle. Cada session_start crea una nueva generación; session_shutdown elimina sólo el registro propio. Los mensajes se extraen de la rama activa, con límite de filas y bytes y sin datos internos de herramientas. El estado de Pi y el core deben coincidir antes del envío; blockedPreview sólo muestra la TUI. El plugin no ejecuta mensajes ni altera permisos. No hay streaming por token, remotos ni detección completa de menús modales. Validación real pendiente.

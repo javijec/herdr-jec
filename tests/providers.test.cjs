@@ -18,10 +18,13 @@ async function load() {
   ].map(name => 'export const '+name+' = (...args)=>globalThis.__jecProviderCalls.push(['+JSON.stringify(name)+',...args]);').join("\n");
   const opencode = ["identify","read","status","send","interrupt","blockedPreview"].map(name =>
     'export const '+name+' = (...args)=>globalThis.__jecProviderCalls.push(["opencode.'+name+'",...args]);').join("\n");
+  const pi = ["identify","read","status","send","interrupt","blockedPreview"].map(name =>
+    'export const '+name+' = (...args)=>globalThis.__jecProviderCalls.push(["pi.'+name+'",...args]);').join("\n");
   globalThis.__jecProviderCalls = calls;
   const registry = await import(moduleUrl(read("mods/jec-chat/providers/index.js")
     .replace('"./codex.js"',JSON.stringify(moduleUrl(codex)))
     .replace('"./opencode.js"',JSON.stringify(moduleUrl(opencode)))
+    .replace('"./pi.js"',JSON.stringify(moduleUrl(pi)))
     .replace('"../provider-catalog.js"',JSON.stringify(catalogUrl))));
   return { catalog, target, registry, calls };
 }
@@ -56,7 +59,8 @@ test("registry does not fall back to Codex for known unsupported agents or remot
   const provider=registry.providerFor(local("codex"));
   assert.equal(provider.id,"codex");
   assert.equal(registry.providerFor(local("opencode")).id,"opencode");
-  assert.equal(registry.providerFor(local("pi"),true),null);
+  assert.equal(registry.providerFor(local("pi"),true).id,"pi");
+  assert.equal(registry.providerFor({...local("pi"),terminal:"server/t1y"},true),null);
   assert.equal(registry.providerFor({...local("opencode"),terminal:"server/t1y"}),null);
   assert.equal(registry.providerFor(local("opencode"),true).id,"opencode");
   assert.equal(registry.providerFor({...local("codex"),terminal:"server/t1y"},true),null);
@@ -121,4 +125,14 @@ test("action identity changes with the live registration, draft identity stays w
   assert.equal(registry.sameActiveSession({id:"id",file:"a"},{id:"id",file:"b"}),false);
   assert.equal(registry.sessionKey(target,provider,a),registry.sessionKey(target,provider,b));
   assert.notEqual(registry.sessionKey(target,provider,a),registry.sessionKey(target,provider,{...a,id:"ses_other"}));
+});
+
+test("Pi routes through its own registered provider",async()=>{
+  const {registry,calls}=await load();
+  const target=local("pi"), provider=registry.providerFor(target), session={id:"id",generation:"g"};
+  assert.equal(provider.capabilities.discovery,false);
+  assert.equal(registry.allowsAction(target,provider,session,true,"send"),true);
+  assert.equal(registry.allowsAction(target,provider,session,true,"approval"),false);
+  await provider.identify(target); await provider.send(target,session,"hola");
+  assert.deepEqual(calls,[["pi.identify",target],["pi.send",target,session,"hola"]]);
 });

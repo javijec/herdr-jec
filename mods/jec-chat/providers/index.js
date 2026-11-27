@@ -2,6 +2,7 @@
 // have been validated against the agent's existing live terminal.
 import * as codex from "./codex.js";
 import * as opencode from "./opencode.js";
+import * as pi from "./pi.js";
 import { agentInfo, supportsChat, targetMachine } from "../provider-catalog.js";
 
 const codexProvider = Object.freeze({
@@ -28,7 +29,13 @@ const opencodeProvider = Object.freeze({
   interrupt: opencode.interrupt,
   blockedPreview: opencode.blockedPreview,
 });
-const providers = new Map([[codexProvider.id, codexProvider], [opencodeProvider.id, opencodeProvider]]);
+const piProvider = Object.freeze({
+  id: "pi", name: "Pi / Gentle Shell",
+  capabilities: Object.freeze({ history: true, discovery: false, send: true, interrupt: true, blockedPreview: true, approval: false, remote: false }),
+  identify: pi.identify, read: pi.read, status: pi.status,
+  send: pi.send, interrupt: pi.interrupt, blockedPreview: pi.blockedPreview,
+});
+const providers = new Map([codexProvider, opencodeProvider, piProvider].map(p => [p.id, p]));
 export function providerFor(target, manual = false) {
   if (!target?.terminal || !target?.cwd) return null;
   if (supportsChat(target)) return providers.get(target.providerId) ?? null;
