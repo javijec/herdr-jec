@@ -2,7 +2,7 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
-import { listSessions, readSession } from "./providers/codex.js";
+import { listSessions, readSession, resolveCurrentSession } from "./providers/codex.js";
 
 function button(t, id, label, onClick, active = false) {
   return div().id(id).h(31).flex_none().px(11).rounded(7)
@@ -49,6 +49,7 @@ export default class JecChat extends View {
     });
     this.sessions = []; this.selected = null; this.messages = []; this.total = 0;
     this.loading = false; this.reading = false; this.error = null;
+    this.matchMethod = null; this.previousView = this.embedded ? activeView(layout()) : null;
     this.manual = false; this.stale = false; this.more = false;
     this.scroll = ScrollHandle.new();
     this.closed = false; this.seq = 0; this.readSeq = 0;
@@ -74,17 +75,22 @@ export default class JecChat extends View {
       this.target = next ?? emptyTarget();
       this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
       this.manual = false; this.error = null; this.loading = false; this.reading = false;
-      this.seq++; this.readSeq++; this.more = false; this.stale = false;
+      this.seq++; this.readSeq++; this.more = false; this.stale = false; this.matchMethod = null;
       if (next?.isCodex && next.cwd) this.scan(cx);
       cx.notify();
     }
-    // Another tab/agent was selected while the Chat half of the stack
-    // was active: leave it instead of displaying the old terminal's transcript.
-    if (!next && activeView(layout()) === "jec-chat-view") this.back();
+    const view = activeView(layout());
+    // A Codex user can type /new or /resume while in Terminal. Every time
+    // Chat is reopened, re-identify the session rather than reuse a stale file.
+    if (!changed && next && view === "jec-chat-view" && this.previousView !== "jec-chat-view") this.scan(cx);
+    this.previousView = view;
+    // Another tab/agent was selected while Chat was active.
+    if (!next && view === "jec-chat-view") this.back();
   }
   scan(cx) {
     if (this.loading || !this.target.cwd || this.target.machine) return;
     this.loading = true; this.error = null; this.selected = null;
+    this.matchMethod = null;
     this.messages = []; this.total = 0; this.readSeq++; this.reading = false;
     const seq = ++this.seq;
     cx.spawn(async cx => {
@@ -92,7 +98,14 @@ export default class JecChat extends View {
         const result = await listSessions(this.target.cwd);
         if (seq !== this.seq || this.closed) return;
         this.sessions = result.sessions ?? []; this.more = Boolean(result.limited || result.total > this.sessions.length);
-        // Never equate an only matching folder session with the live terminal.
+        if (this.sessions.length && this.target.isCodex && this.target.terminal) {
+          const match = await resolveCurrentSession(this.target.cwd, this.target.terminal, this.sessions);
+          if (seq !== this.seq || this.closed) return;
+          if (match?.session) {
+            this.matchMethod = match.method;
+            this.choose(match.session, cx);
+          }
+        }
       } catch (e) { if (seq === this.seq) this.error = String(e?.message ?? e); }
       finally { if (seq === this.seq) { this.loading = false; cx.notify(); } }
     });
@@ -121,7 +134,7 @@ export default class JecChat extends View {
     return v_flex().gap(8).p(14)
       .child(div().font_semibold().text_size(16).child("Elegí la sesión correcta"))
       .child(div().text_color(t.muted).text_size(12).child(
-        "Elegí la sesión de Codex que querés consultar. Si hay varias, no se elige automáticamente la más reciente."))
+        "No pudimos confirmar qué sesión está abierta en esta terminal. Elegí la correcta; nunca seleccionamos por fecha."))
       .children(this.sessions.map((s, i) =>
         h_flex().id("jec-session-" + i).p(11).gap(10).rounded(8).bg(t.raised)
           .border_1().border_color(t.border).cursor_pointer().hover(el => el.bg(t.hover))
@@ -164,7 +177,7 @@ export default class JecChat extends View {
           [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ")))
         .child(button(t, "jec-terminal", this.embedded ? "Terminal" : "← Terminal", () => this.back()))
         .when(Boolean(this.selected), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => {
-          this.selected = null; this.messages = []; this.readSeq++; this.reading = false; this.error = null; cx.notify();
+          this.selected = null; this.messages = []; this.readSeq++; this.reading = false; this.error = null; this.matchMethod = null; cx.notify();
         })))
         .child(button(t, "jec-refresh", "Actualizar", cx => {
           if (this.selected) this.refresh(cx); else if (canRead) this.scan(cx);
@@ -192,6 +205,8 @@ export default class JecChat extends View {
             .child(div().font_semibold().text_size(11).child(this.selected.id.slice(0, 16)))
             .child(div().text_size(11).text_color(t.muted).child(
               this.reading ? "Actualizando…" : this.total + " eventos"))
+            .when(Boolean(this.matchMethod), el => el.child(div().text_size(11).text_color(t.accent)
+              .child("Detectada: " + this.matchMethod)))
             .when(this.stale, el => el.child(div().text_size(11).text_color(t.dim).child("Últimos mensajes"))))
           .child(v_flex().id("jec-chat-scroll").flex_1().min_h(0).overflow_y_scrollbar()
             .track_scroll(this.scroll).p(12).gap(10)
