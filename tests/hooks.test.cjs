@@ -80,3 +80,19 @@ test("install preserves existing hooks and is idempotent", () => {
     assert.equal(fs.readFileSync(target,"utf8"), "{broken");
   } finally { fs.rmSync(home, { recursive: true, force: true }); }
 });
+
+test("hook reports a missing terminal environment and failed label without storing prompts", () => {
+  const input = { hook_event_name: "UserPromptSubmit", session_id: ID, cwd, transcript_path: file, prompt: "private text" };
+  const missing = {};
+  assert.equal(apply(input, {}, () => { throw Error("unexpected call"); }, missing), false);
+  assert.equal(missing.reason, "missing_HC_TERMINAL_ID");
+  const failed = {};
+  assert.equal(apply(input, env, () => null, failed), false);
+  assert.equal(failed.reason, "hc_label_failed");
+  assert.equal(failed.terminal, "t1q");
+  assert.equal(failed.hasTranscriptPath, true);
+  assert.equal(JSON.stringify(failed).includes(input.prompt), false);
+  const good = {};
+  assert.equal(apply(input, env, () => "", good), true);
+  assert.equal(good.reason, "registered");
+});
