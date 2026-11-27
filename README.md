@@ -59,9 +59,13 @@ Con la referencia oficial materializada, usar `node scripts/verify.cjs --require
 
 ## v0.6 — Métricas de máquina
 
-Workspace Status muestra CPU, RAM, disco del sistema y temperatura de CPU (si hay un sensor identificado) del espacio activo. Usa `exec` oficial con el destino `on` de Herdr. Linux: /proc/stat (muestra de un segundo), MemAvailable, df de / y sensores térmicos identificados. Windows: CIM Win32_Processor, Win32_OperatingSystem y Win32_LogicalDisk del disco del sistema; temperatura no disponible. macOS y otros sistemas todavía no soportados. Las cifras de disco no representan todos los volúmenes. No instala servicios, usa credenciales existentes de Herdr y no añade paneles.
+Workspace Status muestra CPU, RAM, disco del sistema y temperatura de CPU (si hay un sensor identificado) del espacio activo. Usa `exec` oficial con el destino `on` de Herdr. Linux: /proc/stat (muestra de un segundo), MemAvailable, df de / y sensores térmicos identificados. Windows: CIM Win32_PerfFormattedData_PerfOS_Processor para CPU, con respaldo Win32_Processor y, si ambos fallan pero hay otras métricas, una muestra de GetSystemTimes de un segundo en un proceso separado. RAM y disco: Win32_OperatingSystem y Win32_LogicalDisk del disco del sistema; temperatura no disponible. macOS y otros sistemas todavía no soportados. Las cifras de disco no representan todos los volúmenes. No instala servicios, usa credenciales existentes de Herdr y no añade paneles.
 
 Sólo consulta la máquina activa cuando su layout está listo y la ventana visible y activa. Una consulta a la vez, cada 15 segundos tras un resultado; reintento de fallos tras 60 segundos. El timer comprueba cada 5 segundos, sin trabajo en herdr-app check. No muestra datos antiguos tras 45 segundos; la temperatura no disponible se omite y el tooltip explica los datos ausentes. En máquinas remotas de plataforma desconocida intenta Linux y después Windows, con timeout por comando. Las métricas se guardan sólo en memoria.
+
+### v0.6.1 — Corrección de CPU Windows
+
+Se prioriza el contador global de rendimiento de Windows (independiente del idioma), conservando el cero como lectura válida. Si WMI no devuelve CPU pero sí RAM/disco, se intenta GetSystemTimes sin descartar esas mediciones. El fallback nativo usa Add-Type sólo cuando es necesario y no instala servicios ni requiere un módulo externo.
 
 ## Desarrollo
 

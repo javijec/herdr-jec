@@ -35,3 +35,28 @@ test("Linux CPU counters retain full integer precision on long-running hosts",as
  const {LINUX_SCRIPT}=await load();
  assert.ok(LINUX_SCRIPT.includes('printf "%.0f %.0f\\n",total,$5+$6'));
 });
+
+test("Windows CPU uses invariant performance class and retains zero as a valid reading",async()=>{
+ const {WINDOWS_SCRIPT,probe}=await load();
+ assert.match(WINDOWS_SCRIPT,/Win32_PerfFormattedData_PerfOS_Processor/);
+ assert.match(WINDOWS_SCRIPT,/PercentProcessorTime/);
+ assert.match(WINDOWS_SCRIPT,/Win32_Processor/);
+ const calls=[];
+ const result=await probe(async(cmd,args,opts)=>{calls.push(args);return {code:0,stdout:"JEC_METRICS_V1\ncpu=0\nmem=100 200\n"}},null,"windows");
+ assert.equal(result.data.cpu,0);assert.equal(calls.length,1);
+});
+test("Windows native CPU fallback keeps RAM and disk and uses the same machine",async()=>{
+ const {probe,WINDOWS_CPU_FALLBACK_SCRIPT}=await load(), calls=[];
+ const result=await probe(async(cmd,args,opts)=>{
+   calls.push({cmd,args,opts});
+   return {code:0,stdout:args.includes(WINDOWS_CPU_FALLBACK_SCRIPT)?"JEC_METRICS_V1\ncpu=32.5\n":"JEC_METRICS_V1\ncpu=\nmem=100 200\ndisk=200 800\n"};
+ },"pc","windows");
+ assert.equal(result.data.cpu,32.5);assert.equal(result.data.ram.percent,50);assert.equal(result.data.disk.percent,25);
+ assert.equal(calls.length,2);assert.ok(calls.every(c=>c.opts.on==="pc"));
+ assert.match(WINDOWS_CPU_FALLBACK_SCRIPT,/GetSystemTimes/);
+});
+test("failed Windows native fallback does not erase valid RAM",async()=>{
+ const {probe}=await load();let n=0;
+ const result=await probe(async()=>{if(++n===2)throw Error("unavailable");return {code:0,stdout:"JEC_METRICS_V1\ncpu=\nmem=100 200\n"}},null,"windows");
+ assert.equal(result.data.cpu,null);assert.equal(result.data.ram.percent,50);
+});
