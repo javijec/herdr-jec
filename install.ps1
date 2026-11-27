@@ -1,6 +1,6 @@
 # Instala JEC Chat sin modificar el layout main ni los mods originales de Herdr.
 # El layout personalizado jec-chat alterna Chat/Terminal en la misma area central.
-param([switch]$SkipCodexHooks)
+param([switch]$SkipCodexHooks, [switch]$SkipOpenCodePlugin)
 $ErrorActionPreference = 'Stop'
 $modRoot = Join-Path $HOME '.config\herdr-app\mods'
 $layoutRoot = Join-Path $HOME '.config\herdr-app\layouts'
@@ -35,6 +35,20 @@ if (-not $SkipCodexHooks) {
   }
 }
 
+if (-not $SkipOpenCodePlugin) {
+  # OpenCode v2 discovers directory plugins with a tui.ts entry.
+  $ocConfig = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR }
+    elseif ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME 'opencode' }
+    else { Join-Path $HOME '.config\opencode' }
+  $ocPlugin = Join-Path $ocConfig 'plugins\jec-chat-opencode'
+  $ocSource = Join-Path $PSScriptRoot 'integrations\opencode\tui.ts'
+  if (-not (Test-Path $ocSource)) { throw 'No se encontro el plugin JEC de OpenCode.' }
+  New-Item -ItemType Directory -Path $ocPlugin -Force | Out-Null
+  Copy-Item -LiteralPath $ocSource -Destination (Join-Path $ocPlugin 'tui.ts') -Force
+  Write-Host "Plugin OpenCode v2 instalado: $ocPlugin"
+  Write-Host 'Reinicia OpenCode desde Herdr y revisa /plugins si solicita habilitar JEC.'
+}
+
 if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
   foreach ($name in @('jec-chat', 'jec-pane')) {
     & herdr-app check (Join-Path $modRoot $name)
@@ -50,4 +64,4 @@ if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
 } else {
   Write-Warning 'herdr-app no esta en PATH. Abri Herdr y usa Ctrl+Shift+L para elegir jec-chat.'
 }
-Write-Host 'Listo. En la terminal de Codex, el boton Chat estara en su encabezado.'
+Write-Host 'Listo. En las terminales locales de Codex y OpenCode, el boton Chat estara en su encabezado.'
