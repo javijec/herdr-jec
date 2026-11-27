@@ -64,7 +64,7 @@ test("install preserves existing hooks and is idempotent", () => {
     assert.equal(count, 1);
   }
   assert.equal(merge(old, "node hook.cjs"), false);
-  assert.equal(commandFor("C:\\Users\\Example Name\\hook.cjs", "win32", "C:\\Program Files\\nodejs\\node.exe"), "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::In.ReadToEnd() | & 'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\Example Name\\hook.cjs'; exit $LASTEXITCODE");
+  assert.equal(commandFor("C:\\Users\\Example Name\\hook.cjs", "win32", "C:\\Program Files\\nodejs\\node.exe"), "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); ([System.IO.StreamReader]::new([Console]::OpenStandardInput(), $OutputEncoding)).ReadToEnd() | & 'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\Example Name\\hook.cjs'; exit $LASTEXITCODE");
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "jec-hooks-"));
   try {
     const target = path.join(home, "hooks.json");
@@ -115,7 +115,7 @@ test("PowerShell launches the actual Windows hook and forwards the JSON on stdin
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "jec hook test "));
   try {
     const hook = path.join(home, "test-hook.cjs");
-    fs.writeFileSync(hook, "const fs=require('node:fs');const input=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(input.prompt);");
+    fs.writeFileSync(hook, "const fs=require('node:fs');const input=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(Buffer.from(input.prompt,'utf8').toString('base64'));");
     const command = commandFor(hook);
     for (const shell of ["powershell.exe","pwsh.exe"]) {
       const result = spawnSync(shell,["-NoProfile","-NonInteractive","-Command",command],{
@@ -123,7 +123,7 @@ test("PowerShell launches the actual Windows hook and forwards the JSON on stdin
       });
       if (shell==="pwsh.exe" && result.error?.code==="ENOENT") continue;
       assert.equal(result.status,0,result.stderr || String(result.error));
-      assert.equal(result.stdout,"sesión");
+      assert.equal(result.stdout.trim(),Buffer.from("sesión","utf8").toString("base64"));
     }
   } finally { fs.rmSync(home,{recursive:true,force:true}); }
 });
