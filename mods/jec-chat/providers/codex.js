@@ -99,8 +99,8 @@ export async function registeredSession(cwd, address) {
 // Keep the interactive path separate from discovery. A manually picked
 // transcript is never sufficient authority to send into a live terminal.
 export function terminalStatus(record) {
-  // The core's report is authoritative, unlike the UI's derived unread/done state.
-  const state = record?.report?.state ?? (typeof record?.status === "string" ? record.status : record?.status?.state);
+  // Use the core's explicit status first: hc send --if checks that exact state.
+  const state = (typeof record?.status === "string" ? record.status : record?.status?.state) ?? record?.report?.state;
   return typeof state === "string" ? state.toLowerCase() : null;
 }
 export function validatePrompt(text) {
@@ -125,12 +125,16 @@ export async function sendPrompt(target, session, text, stillCurrent = () => tru
       || !entry || entry.id !== session.id.toLowerCase() || entry.file !== session.file)
     throw new Error("La sesión cambió. Actualizá el chat antes de enviar.");
   const status = terminalStatus(record);
-  if (status !== "idle")
+  if (status !== "idle" && status !== "done")
     throw new Error("Codex no está listo. Estado del core: " + (status ?? "sin estado") + ". Esperá o revisá Terminal.");
   if (!stillCurrent()) throw new Error("Cambió el panel activo. No se envió el mensaje.");
-  // The core rechecks idle at delivery; do not use --force or retry on error.
-  // End options before the terminal and the user's literal text.
-  const result = await hc(["send", "--if", "idle", "--json", "--", target.terminal, prompt]);
+  // Herdr only accepts idle/working in --if; a finished ("done") turn
+  // is also ready for a new prompt. Use the native send for done after the
+  // fresh status + UUID checks above. The core still refuses blocked input
+  // atomically and respects unfinished terminal drafts. Never pass --force.
+  // There is no atomic --if done in this core version.
+  const args = status === "idle" ? ["send", "--if", "idle"] : ["send"];
+  const result = await hc([...args, "--json", "--", target.terminal, prompt]);
   if (result.code !== 0) {
     const raw = String(result.stderr || result.stdout || "");
     const unsupported = /unexpected argument|unknown (?:argument|option)|unrecognized option|invalid option/i.test(raw) && /--if/.test(raw);
