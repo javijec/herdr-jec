@@ -1,12 +1,12 @@
-// JEC Pane: stock Herdr pane header with a capability-gated Chat action.
-// The stock mods/pane and main layout remain unchanged.
+// Derived from herdrdev/herdr-app defaults/mods/pane/main.js @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa
+// Apache-2.0; see LICENSE.herdr. Modified for JEC header role and Chat action.
 // A pane's header, for layouts that frame their panes:
 //   { "tab": "active", "pane": { "header": { "content": { "mod": "pane" } } } }
 // Shows the program's icon (the app's program table), the agent's name or
 // the terminal's title, the folder, and the agent's status; buttons split, zoom and close
 // this pane. Props from the app: { pane, terminal }. Click: focus the pane.
 
-import { View, div, svg, image } from "gpui-kit";
+import { div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { panes, props, run, theme, home, layout, spaces, shared, setShared } from "herdr";
 import { detectAgent, supportsChat } from "./provider-catalog.js";
@@ -47,12 +47,10 @@ function folder(cwd) {
   return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
 }
 
-export default class Pane extends View {
-  init(_props, cx) {
+export class PaneHeader {
+  constructor(cx) {
     this.hovered = false;
-    // The embedded chat may be unmounted when Terminal is visible. The
-    // visible pane header restores the remembered view without relying on
-    // a hidden chat timer. Only the exact remembered pane can switch.
+    // Restore only the remembered pane of the current tab.
     cx.timer.every(250, () => this.restoreChat());
   }
   restoreChat() {
@@ -93,8 +91,9 @@ export default class Pane extends View {
         cx.stop_propagation();
         // This is the exact pane/terminal, never a guess based on cwd.
         const active = activeTab(spaces());
-        if (p.tab !== active?.tab || !chatAvailable(p)) return;
-        setShared(VIEW_KEY, rememberChat(shared(VIEW_KEY), active, p));
+        const live = this.me();
+        if (!live || live.terminal !== p.terminal || live.pane !== p.pane || live.tab !== active?.tab || !chatAvailable(live)) return;
+        setShared(VIEW_KEY, rememberChat(shared(VIEW_KEY), active, live));
         run("layout.select", { stack: "jec-view", child: "jec-chat-view" });
       }).child("Chat");
   }

@@ -1,4 +1,4 @@
-# jec-chat v0.11.1 — alcance y contrato
+# jec-chat v0.12 — alcance y contrato
 
 La preferencia Chat/Terminal se guarda en shared `jec.chat.views.v1`, por espacio y pestaña, con identidad de pane y terminal (hasta 128 entradas). La transición automática hacia Terminal no borra la preferencia. El encabezado visible restaura Chat cuando corresponde; el mod Chat valida la identidad antes de leer o actuar. No cambia el layout original ni habilita vistas simultáneas por split.
 
@@ -112,3 +112,6 @@ Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo ar
 ## Pi / Gentle Shell (v0.11)
 
 Se utiliza la extensión de Pi 1.x, con getSessionId/getCwd/getBranch e isIdle. Cada session_start crea una nueva generación; session_shutdown elimina sólo el registro propio. Los mensajes se extraen de la rama activa, con límite de filas y bytes y sin datos internos de herramientas. El estado de Pi y el core deben coincidir antes del envío; blockedPreview sólo muestra la TUI. El plugin no ejecuta mensajes ni altera permisos. No hay streaming por token, remotos ni detección completa de menús modales. Validación real pendiente.
+
+
+Un único mod instalado (`jec-chat`) con roles `paneHeader` y `embedded`. El encabezado se deriva del código oficial fijado en `upstream/pane.js`. La vista Chat continúa usando el stack del layout público. No se modifica Herdr Desktop ni se requiere `pane.view`.

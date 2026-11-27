@@ -22,20 +22,18 @@ jobs:
       - name: Check Herdr mod JavaScript syntax
         run: |
           node --check mods/jec-chat/main.js
+          node --check mods/jec-chat/pane-header.js
           node --check mods/jec-chat/session.js
           node --check mods/jec-chat/view-state.js
-          node --check mods/jec-pane/view-state.js
           node --check mods/jec-chat/provider-catalog.js
           node --check mods/jec-chat/providers/index.js
           node --check mods/jec-chat/providers/opencode.js
           node --check integrations/opencode/tui.ts
           node --check mods/jec-chat/providers/pi.js
           node --check integrations/pi/jec-chat.ts
-          node --check mods/jec-pane/provider-catalog.js
           node --check mods/jec-chat/providers/codex.js
           node --check mods/jec-chat/providers/match.js
-          node --check mods/jec-pane/main.js
       - name: Validate layout and mod metadata
-        run: node -e "const f=require('fs');for(const p of ['layouts/jec-chat.json','mods/jec-chat/mod.json','mods/jec-pane/mod.json']) JSON.parse(f.readFileSync(p,'utf8'))"
+        run: node -e "const f=require('fs');for(const p of ['layouts/jec-chat.json','mods/jec-chat/mod.json']) JSON.parse(f.readFileSync(p,'utf8'))"
       - name: Run all JEC tests
         run: node --test

@@ -25,16 +25,16 @@ test("layout JEC conserva el Herdr original y cambia solo la vista central", () 
   assert.equal(stage.active, "main");
   assert.equal(stage.children.length, 2);
   assert.equal(find(data, "main").content.tab, "active");
-  assert.equal(find(data, "main").content.pane.header.content.mod, "jec-pane");
+  assert.deepEqual(find(data, "main").content.pane.header.content, {mod:"jec-chat",props:{paneHeader:true}});
   assert.equal(find(data, "jec-chat-view").content.mod, "jec-chat");
   assert.equal(find(data, "jec-chat-view").content.props.embedded, true);
 });
 test("mods JEC no se acoplan al nombre de la terminal ni anulan el layout base", () => {
-  for (const name of ["jec-chat", "jec-pane"]) {
+  for (const name of ["jec-chat"]) {
     const mod = JSON.parse(read(`mods/${name}/mod.json`));
     assert.equal(mod.place, "none");
   }
-  const pane = read("mods/jec-pane/main.js");
+  const pane = read("mods/jec-chat/pane-header.js");
   assert.match(pane, /setShared\(VIEW_KEY, rememberChat/);
   assert.match(pane, /chatAvailable\(p\)/);
   assert.match(pane, /stack: "jec-view", child: "jec-chat-view"/);
@@ -45,7 +45,7 @@ test("mods JEC no se acoplan al nombre de la terminal ni anulan el layout base",
 
 test("Chat embebido replica el marco y el encabezado compacto del pane original", () => {
   const chat = read("mods/jec-chat/main.js");
-  const pane = read("mods/jec-pane/main.js");
+  const pane = read("mods/jec-chat/pane-header.js");
   assert.match(chat, /this\.embedded \? 30 : 53/);
   assert.match(chat, /rounded\(10\)\.overflow_hidden\(\)\.border_1\(\)\.border_color\(t\.border\)/);
   assert.match(chat, /program\.tint \? svg\(program\.icon\)/);
@@ -57,7 +57,6 @@ test("Chat embebido replica el marco y el encabezado compacto del pane original"
 
 test("Chat view preferences are independent per tab and space", async () => {
   const source = read("mods/jec-chat/view-state.js");
-  assert.equal(source,read("mods/jec-pane/view-state.js"));
   const {activeTab,rememberChat,forgetChat,wantedPane,activeView} =
     await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
   const a={space:"s1",tab:"b1"}, b={space:"s1",tab:"b2"}, c={space:"s2",tab:"b3"};
@@ -81,9 +80,21 @@ test("Chat view preferences are independent per tab and space", async () => {
   assert.equal(activeView({id:"root",children:[{id:"jec-view",active:"main"}]}),"main");
 });
 test("explicit Terminal forgets only active tab; automatic fallback does not forget",()=>{
-  const chat=read("mods/jec-chat/main.js"), pane=read("mods/jec-pane/main.js");
+  const chat=read("mods/jec-chat/main.js"), pane=read("mods/jec-chat/pane-header.js");
   assert.match(chat,/back\(\) \{[\s\S]*?forgetChat\(shared\(VIEW_KEY\), activeTab\(spaces\(\)\)\)/);
   assert.doesNotMatch(chat,/if \(!next && view === "jec-chat-view"\) this\.back\(\)/);
   assert.match(pane,/cx\.timer\.every\(250, \(\) => this\.restoreChat\(\)\)/);
   assert.match(pane,/p\.terminal !== wanted\.terminal/);
+});
+
+test("single installed mod dispatches header and chat roles on stock Herdr",()=>{
+ const chat=read("mods/jec-chat/main.js"), header=read("mods/jec-chat/pane-header.js"), installer=read("install.ps1");
+ assert.match(chat,/this\.headerRole = config\.paneHeader === true/);
+ assert.match(chat,/if \(this\.headerRole\) return this\.paneHeader\.render\(cx\)/);
+ assert.match(chat,/close\(\) \{ if \(this\.headerRole\) return/);
+ assert.match(header,/Derived from herdrdev\/herdr-app/);
+ assert.doesNotMatch(chat+header,/pane\.view/);
+ assert.match(installer,/@\('jec-chat'\)/);
+ assert.doesNotMatch(installer,/@\('jec-chat', 'jec-pane'\)/);
+ assert.equal(fs.existsSync(path.join(root,"mods/jec-pane")),false);
 });

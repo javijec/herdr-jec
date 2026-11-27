@@ -5,6 +5,7 @@ import { resolveTarget, shortDate } from "./session.js";
 import { providerFor, providerName, sessionKey, sameActiveSession, allowsAction } from "./providers/index.js";
 import { supportsChat } from "./provider-catalog.js";
 import { VIEW_KEY, activeTab, wantedPane, forgetChat, activeView } from "./view-state.js";
+import { PaneHeader } from "./pane-header.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -32,7 +33,10 @@ const emptyTarget = () => ({ terminal: null, pane: null, cwd: null, machine: nul
 
 export default class JecChat extends View {
   init(_props, cx) {
-    this.embedded = props()?.embedded === true;
+    const config = props() ?? {};
+    this.headerRole = config.paneHeader === true;
+    if (this.headerRole) { this.paneHeader = new PaneHeader(cx); return; }
+    this.embedded = config.embedded === true;
     this.target = this.embedded ? (embeddedTarget() ?? emptyTarget()) : resolveTarget({
       focus: focused(), allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
     });
@@ -87,12 +91,15 @@ export default class JecChat extends View {
       if (Date.now() - this.lastPoll >= interval) { this.lastPoll = Date.now(); this.refresh(cx); }
     });
   }
-  close() { this.closed = true; this.seq++; this.readSeq++; this.composer.release(); }
+  close() { if (this.headerRole) return; this.closed = true; this.seq++; this.readSeq++; this.composer.release(); }
   back() {
     this.composer.blur();
     if (this.embedded) {
       // An explicit Terminal click changes ONLY this tab's preference.
-      setShared(VIEW_KEY, forgetChat(shared(VIEW_KEY), activeTab(spaces())));
+      const active = activeTab(spaces());
+      const live = embeddedTarget();
+      if (!live || live.terminal !== this.target?.terminal || live.pane !== this.target?.pane || live.tab !== this.target?.tab || live.space !== this.target?.space) return;
+      setShared(VIEW_KEY, forgetChat(shared(VIEW_KEY), active));
       run("layout.select", { stack: "jec-view", child: "main" });
     } else closeOverlay(props()?.overlay);
   }
@@ -112,6 +119,7 @@ export default class JecChat extends View {
       this.manual = false; this.error = null; this.loading = false; this.reading = false;
       this.seq++; this.readSeq++; this.more = false; this.stale = false; this.matchMethod = null;
       this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
+      this.dialog = null; this.waitingFor = null; this.sendError = null; this.sendNotice = null;
       if (this.provider) this.scan(cx);
       cx.notify();
     }
@@ -464,6 +472,7 @@ export default class JecChat extends View {
     this.scan(cx, true); cx.notify();
   }
   render(cx) {
+    if (this.headerRole) return this.paneHeader.render(cx);
     const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
     const target = this.embedded && (valid?.terminal !== this.target?.terminal
       || valid?.pane !== this.target?.pane || valid?.tab !== this.target?.tab

@@ -5,7 +5,7 @@ $ErrorActionPreference = 'Stop'
 $modRoot = Join-Path $HOME '.config\herdr-app\mods'
 $layoutRoot = Join-Path $HOME '.config\herdr-app\layouts'
 
-foreach ($name in @('jec-chat', 'jec-pane')) {
+foreach ($name in @('jec-chat')) {
   $source = Join-Path $PSScriptRoot "mods\$name"
   $destination = Join-Path $modRoot $name
   if (-not (Test-Path (Join-Path $source 'mod.json'))) {
@@ -72,7 +72,7 @@ if (-not $SkipPiExtension) {
 }
 
 if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
-  foreach ($name in @('jec-chat', 'jec-pane')) {
+  foreach ($name in @('jec-chat')) {
     & herdr-app check (Join-Path $modRoot $name)
     if ($LASTEXITCODE -ne 0) {
       Write-Warning "herdr-app check fallo para $name. No se cambio el layout."
@@ -82,6 +82,17 @@ if (Get-Command herdr-app -ErrorAction SilentlyContinue) {
   & herdr-app do layout.switch --name jec-chat
   if ($LASTEXITCODE -ne 0) {
     Write-Warning 'No se pudo activar el layout automaticamente. En Herdr ejecuta: herdr-app do layout.switch --name jec-chat'
+  } else {
+    # Retire the old JEC header only after the unified layout passed validation.
+    # Preserve it outside mods so rollback is possible; never touch stock pane.
+    $legacy = Join-Path $modRoot 'jec-pane'
+    if (Test-Path -LiteralPath $legacy) {
+      $backupRoot = Join-Path (Split-Path $modRoot -Parent) 'jec-backups'
+      New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+      $backup = Join-Path $backupRoot ('jec-pane-' + [guid]::NewGuid().ToString('N'))
+      Move-Item -LiteralPath $legacy -Destination $backup
+      Write-Host "Mod anterior respaldado: $backup"
+    }
   }
 } else {
   Write-Warning 'herdr-app no esta en PATH. Abri Herdr y usa Ctrl+Shift+L para elegir jec-chat.'

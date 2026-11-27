@@ -29,8 +29,8 @@ async function load() {
   return { catalog, target, registry, calls };
 }
 const local = (providerId) => ({providerId,terminal:"t1y",cwd:"/work",machine:null});
-test("catalog is synchronized and identifies only explicit program metadata", async ()=>{
-  assert.equal(read("mods/jec-pane/provider-catalog.js"),catalogSource);
+test("catalog is shared and identifies only explicit program metadata", async ()=>{
+  assert.match(read("mods/jec-chat/pane-header.js"), /from "\.\/provider-catalog\.js"/);
   const {catalog} = await load();
   for (const [program,app,id] of [
     [{key:"codex"},null,"codex"],[{name:"OpenCode"},null,"opencode"],

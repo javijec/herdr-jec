@@ -128,7 +128,10 @@
                       },
                       "header": {
                         "content": {
-                          "mod": "jec-pane"
+                          "mod": "jec-chat",
+                          "props": {
+                            "paneHeader": true
+                          }
                         },
                         "height": 30,
                         "position": "top",

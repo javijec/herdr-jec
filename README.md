@@ -2,7 +2,9 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.11.1 (vista independiente por pestaña)
+## jec-chat v0.12 (un solo mod, Herdr oficial)
+
+El mismo mod `jec-chat` renderiza el encabezado basado en el pane oficial (`paneHeader: true`), la vista de conversación embebida y el diálogo de la paleta. El instalador sólo instala `jec-chat` y respalda `jec-pane` después de validar y activar el layout. Se conserva el stack de la API pública y el estado por pestaña: no requiere compilar Herdr ni instalar un fork. No hay vistas Chat simultáneas en splits. La rama experimental nativa queda separada.
 
 Cada pestaña recuerda si se abrió Chat o Terminal. Al cambiar de pestaña o espacio se restaura la vista elegida; pulsar Terminal sólo modifica la pestaña activa. En pestañas con splits se recuerda un único pane Chat (el layout central sigue siendo compartido). Las preferencias son de la sesión de Herdr, no se promete persistencia tras reiniciar la aplicación.
 
