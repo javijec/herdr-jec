@@ -8,7 +8,7 @@ Se instala sobre el Herdr base, sin sustituir el layout, la barra de tabs ni el 
 2. Paleta de comandos → **JEC Chat: ver conversacion de Codex**.
 3. El mod congela la identidad de la terminal, y toma su `cwd` y máquina del modelo Herdr.
 4. El lector Node local busca `session_meta.payload.cwd` en los rollout de Codex.
-5. Una coincidencia: abrir. Varias: selector explícito. Ninguna: aviso.
+5. Una o varias coincidencias: selector explícito. Nunca se deduce la sesión activa solo por la carpeta. Ninguna: aviso.
 6. Renderiza mensajes y herramientas del JSONL con `TextView.markdown`.
 7. **← Terminal** cierra el diálogo y muestra el terminal sin detener nada.
 
@@ -17,7 +17,7 @@ Se instala sobre el Herdr base, sin sustituir el layout, la barra de tabs ni el 
 - El lector sólo lee archivos regulares dentro del directorio de sesiones Codex y
   verifica que `session_meta.payload.cwd` coincida con el `cwd` elegido.
 - No se envía texto al agente, no se usan claves de API, no se alteran sesiones.
-- Con varios Codex en la misma carpeta, no puede inferirse con certeza cuál usa la
+- Incluso con un único Codex encontrado en la carpeta, no puede inferirse con certeza cuál usa la
   terminal actual: el usuario debe seleccionar.
 - La detección de Codex depende de los metadatos de programa de Herdr;
   se ofrece búsqueda manual cuando no hay un indicador fiable.
