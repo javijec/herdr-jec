@@ -25,7 +25,7 @@ function commandFor(script, platform = process.platform, executable = process.ex
   // A quoted executable is a string expression in PowerShell, not a command.
   // Explicitly read the JSON on stdin and pipe it to Node as UTF-8.
   const quote = value => "'" + value.replace(/\//g, "\\").replace(/'/g, "''") + "'";
-  return "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::In.ReadToEnd() | & "
+  return "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); ([System.IO.StreamReader]::new([Console]::OpenStandardInput(), $OutputEncoding)).ReadToEnd() | & "
     + quote(executable) + " " + quote(script) + "; exit $LASTEXITCODE";
 }
 function merge(config, command, legacyCommand = null) {
