@@ -1,0 +1,36 @@
+{
+  "version": "0.5.0",
+  "upstream": "1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa",
+  "mods": [
+    {
+      "name": "spaces",
+      "id": "jec-spaces",
+      "blocks": [
+        "spaces"
+      ]
+    },
+    {
+      "name": "agents",
+      "id": "jec-agents",
+      "blocks": [
+        "agents"
+      ]
+    },
+    {
+      "name": "workspace-status",
+      "id": "jec-workspace-status",
+      "blocks": [
+        "status"
+      ]
+    },
+    {
+      "name": "workspace-chrome",
+      "id": "jec-workspace-chrome",
+      "blocks": [
+        "brand",
+        "sidebar-footer"
+      ],
+      "footerExtra": 28
+    }
+  ]
+}

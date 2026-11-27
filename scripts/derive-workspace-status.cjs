@@ -27,6 +27,20 @@ const changes=[
     ""
   ]
 ];
+changes.push(...[
+  [
+    "import { spaces, agents, machines, theme, run, window, keys } from \"herdr\";",
+    "import { spaces, agents, terminals, machines, theme, run, window, keys } from \"herdr\";\nimport { agentSummary, summaryLabel } from \"./agent-summary.js\";"
+  ],
+  [
+    "    const list = agents();\n    const needs = list.filter(a => a.status === \"blocked\").length;",
+    "    const summary = agentSummary(agents(), terminals());\n    const needs = summary.blocked;"
+  ],
+  [
+    ".child(h_flex().gap(6).items_center().child(div().size(6).rounded(3).bg(t.dim)).child(`${list.length} ${list.length === 1 ? \"agent\" : \"agents\"}`)",
+    ".child(h_flex().gap(6).items_center().flex_none().tooltip(summaryLabel(summary)).child(div().size(6).rounded(3).bg(summary.working ? t.working : t.dim)).child(`${summary.total} ${summary.total === 1 ? \"agent\" : \"agents\"}`)"
+  ]
+]);
 const prefix="// Based on official Herdr Workspace Status @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa; Apache-2.0 (LICENSE.herdr).\n// JEC v0.3: active machine availability and workspace context.\n";
 function derive(source){
  let s=source.replace(/\r\n/g,"\n");

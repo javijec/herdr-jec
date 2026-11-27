@@ -1,7 +1,12 @@
 // Read-only projection of the same live snapshots used by the stock Agents mod.
 // Only listed agents and their live descendants count; addresses are globally
 // qualified by machine. Kept/pinned descendants count once.
-export function agentSummary(list, terminals, kidStatus) {
+// Match the official Agents treatment of children without panes.
+export function kidStatus(k, listed) {
+  if (listed.has(k.address)) return listed.get(k.address);
+  return k.status === "error" ? "blocked" : k.status === "done" ? "idle" : k.status;
+}
+export function agentSummary(list, terminals, statusOf = kidStatus) {
   const listed = new Map(list.map(a => [a.address, a.status]));
   const seen = new Map(listed);
   const children = new Map();
@@ -16,7 +21,7 @@ export function agentSummary(list, terminals, kidStatus) {
     if (expanded.has(parent)) continue;
     expanded.add(parent);
     for (const t of children.get(parent) ?? []) {
-      if (!seen.has(t.address)) seen.set(t.address, kidStatus(t, listed));
+      if (!seen.has(t.address)) seen.set(t.address, statusOf(t, listed));
       if (!expanded.has(t.address)) queue.push(t.address);
     }
   }
