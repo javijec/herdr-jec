@@ -150,10 +150,15 @@ async function main(argv) {
     const file = fileAt >= 0 ? argv[fileAt + 1] : null;
     if (!file || !path.isAbsolute(file) || !under(root, path.resolve(file)))
       throw new Error("Archivo de sesion no permitido.");
+    const [realRoot, realFile] = await Promise.all([fsp.realpath(root), fsp.realpath(file)]);
+    if (!under(realRoot, realFile)) throw new Error("Archivo de sesion fuera del directorio permitido.");
     const stat = await fsp.lstat(file);
     if (!stat.isFile() || stat.size > MAX_SESSION_BYTES) throw new Error("Archivo de sesion invalido.");
     const meta = await head(file);
     if (!meta || !samePath(meta.cwd, cwd)) throw new Error("La sesion no coincide con la carpeta seleccionada.");
+    const idAt = argv.indexOf("--id");
+    if (idAt >= 0 && (!argv[idAt + 1] || meta.id.toLowerCase() !== argv[idAt + 1].toLowerCase()))
+      throw new Error("El UUID de la sesion no coincide con el registro.");
     return { ok: true, id: meta.id, ...await transcript(file) };
   }
   throw new Error("Comando desconocido.");
