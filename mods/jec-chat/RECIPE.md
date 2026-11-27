@@ -1,4 +1,4 @@
-# jec-chat v0.6 — alcance y contrato
+# jec-chat v0.7 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 
@@ -22,11 +22,19 @@ Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo ar
 
 ## Chat interactivo
 
-- El composer usa `TextareaState` y `Textarea` nativos. Enter agrega líneas; sólo el botón Enviar inicia la acción.
+- El composer usa `TextareaState` y `Textarea` nativos. Enter envía y Shift+Enter agrega líneas si el evento submit de Herdr expone los modificadores; el botón Enviar siempre funciona como alternativa.
 - El proveedor valida el texto, exige una sesión registrada, consulta `hc get` para comparar el UUID y la ruta del archivo y verifica que la terminal esté live y Codex esté idle o done. Luego comprueba que el panel no cambió y usa `hc send --if idle --json -- <terminal> <texto>` si está idle, o `hc send --json -- <terminal> <texto>` si está done. Herdr no admite `--if done`: en este segundo caso la comprobación del estado no es atómica con el envío, pero el core sigue rechazando blocked sin --force. No usa --force ni crea otro proceso de Codex.
 - No se reenvía automáticamente ante errores. Se conserva el borrador en memoria y se limpia únicamente después de una respuesta de envío exitosa; los mensajes del historial vienen exclusivamente del JSONL. Los borradores se mantienen separados por terminal y UUID durante la vida de la vista.
 - Si Codex está trabajando o bloqueado, se permite preparar un borrador pero no enviarlo. Se usa Terminal para permisos, comandos slash y comandos shell. El picker de sesiones antiguas sigue siendo sólo lectura.
 - Para el estado idle se requiere `hc send --if idle`; si el core no lo admite, falla sin enviar. Se requiere validación real de la GUI.
+
+## Actividad, interrupción y diálogos (v0.7)
+
+- Refresco cada ~1 s cuando Codex trabaja, espera el historial o hay diálogo bloqueado; en reposo cada ~2–3 s. No se ejecutan lecturas concurrentes y no se refresca en vistas ocultas. Se conserva el historial original de Codex.
+- El aviso de envío se limpia cuando el historial avanza o Codex informa que está trabajando/bloqueado; no se inventa una respuesta.
+- Detener verifica la identidad registrada y el estado working antes de ejecutar `hc interrupt`. El comando nativo no mata el agente. No hay garantía atómica de que el turno no cambie entre la comprobación y la acción.
+- Si el estado es blocked, Ver solicitud lee únicamente la pantalla actual con `hc read --lines 0` y vuelve a verificar el UUID y estado. La captura es informativa; no representa una aprobación estructurada. Resolver en Terminal abre la misma TUI. No se inyectan teclas para aprobar/rechazar permisos ni se modifica la política del agente.
+- No se añaden hooks ni se cambian autorizaciones.
 
 ## Integración visual
 
