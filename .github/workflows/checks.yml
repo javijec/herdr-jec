@@ -15,7 +15,10 @@ jobs:
         with:
           node-version: '22'
       - name: Check Codex reader syntax
-        run: node --check mods/jec-chat/providers/codex.cjs
+        run: |
+          node --check mods/jec-chat/providers/codex.cjs
+          node --check mods/jec-chat/providers/session-hook.cjs
+          node --check mods/jec-chat/providers/install-hooks.cjs
       - name: Check Herdr mod JavaScript syntax
         run: |
           node --check mods/jec-chat/main.js
