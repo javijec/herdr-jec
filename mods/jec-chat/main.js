@@ -39,7 +39,7 @@ export default class JecChat extends View {
         const result = await listSessions(this.target.cwd);
         if (seq !== this.seq || this.closed) return;
         this.sessions = result.sessions ?? []; this.more = Boolean(result.limited || result.total > this.sessions.length);
-        if (this.sessions.length === 1) this.choose(this.sessions[0], cx);
+        // Never equate an only matching folder session with the live terminal.
       } catch (e) { if (seq === this.seq) this.error = String(e?.message ?? e); }
       finally { if (seq === this.seq) { this.loading = false; cx.notify(); } }
     });
