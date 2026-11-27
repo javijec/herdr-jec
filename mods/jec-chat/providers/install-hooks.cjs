@@ -12,17 +12,24 @@ function legacyCommandFor(script, platform = process.platform) {
   }
   return "node '" + script.replace(/'/g, "'\\''") + "'";
 }
-function commandFor(script, platform = process.platform, executable = process.execPath) {
-  if (platform !== "win32") return legacyCommandFor(script, platform);
-  // Codex starts Windows hooks through cmd.exe with a captured environment.
-  // Use the exact node.exe used by the installer, not a PATH lookup or alias.
+function previousWindowsCommand(script, executable = process.execPath) {
   const quote = value => {
     if (/["%!&|<>\r\n]/.test(value)) throw Error("Unsupported character in Windows hook path");
     return '"' + value.replace(/\//g, "\\") + '"';
   };
   return quote(executable) + " " + quote(script);
 }
+function commandFor(script, platform = process.platform, executable = process.execPath) {
+  if (platform !== "win32") return legacyCommandFor(script, platform);
+  // Codex 0.172 uses the environment's shell (normally PowerShell).
+  // A quoted executable is a string expression in PowerShell, not a command.
+  // Explicitly read the JSON on stdin and pipe it to Node as UTF-8.
+  const quote = value => "'" + value.replace(/\//g, "\\").replace(/'/g, "''") + "'";
+  return "$OutputEncoding = [System.Text.UTF8Encoding]::new($false); [Console]::In.ReadToEnd() | & "
+    + quote(executable) + " " + quote(script) + "; exit $LASTEXITCODE";
+}
 function merge(config, command, legacyCommand = null) {
+  const legacy = Array.isArray(legacyCommand) ? legacyCommand : [legacyCommand];
   if (!config || typeof config !== "object" || Array.isArray(config)) throw Error("Invalid hooks.json");
   config.hooks ??= {};
   if (typeof config.hooks !== "object" || Array.isArray(config.hooks)) throw Error("Invalid hooks object");
@@ -32,11 +39,11 @@ function merge(config, command, legacyCommand = null) {
     const groups = config.hooks[event];
     if (!Array.isArray(groups)) throw Error("Invalid hook list: " + event);
     // Migrate only the exact old JEC command, preserving every other hook.
-    if (legacyCommand && legacyCommand !== command) {
+    if (legacy.some(old => old && old !== command)) {
       for (const group of groups) {
         if (!Array.isArray(group?.hooks)) continue;
         for (const handler of group.hooks) {
-          if (handler?.type === "command" && handler.command === legacyCommand) {
+          if (handler?.type === "command" && handler.command !== command && legacy.includes(handler.command)) {
             handler.command = command;
             changed = true;
           }
@@ -53,7 +60,9 @@ function install(home, script) {
   const file = path.join(home, "hooks.json");
   const original = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
   const config = original === null ? {} : JSON.parse(original.replace(/^\uFEFF/, ""));
-  if (!merge(config, commandFor(script), legacyCommandFor(script))) return false;
+  const old = [legacyCommandFor(script)];
+  if (process.platform === "win32") old.push(previousWindowsCommand(script));
+  if (!merge(config, commandFor(script), old)) return false;
   fs.mkdirSync(home, { recursive: true });
   if (original !== null) {
     const backup = path.join(home, "hooks.json.jec-backup-" + Date.now());
@@ -74,4 +83,4 @@ if (require.main === module) {
     console.log(changed ? "JEC hooks added. Review and trust them in Codex /hooks." : "JEC hooks already installed. Review trust in Codex /hooks.");
   } catch (error) { console.error("JEC hooks not installed: " + error.message); process.exitCode = 1; }
 }
-module.exports = { merge, commandFor, legacyCommandFor, install };
+module.exports = { merge, commandFor, legacyCommandFor, previousWindowsCommand, install };
