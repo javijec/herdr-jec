@@ -1,0 +1,238 @@
+diff --git a/src/window.rs b/src/window.rs
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -377,7 +377,15 @@
+     programs: Option<SystemTime>,
+ }
+ 
+-pub struct AppWindow {
++/// A local presentation override. The model pane and its terminal stay intact.
++#[derive(Clone, Debug)]
++struct PaneBody {
++    layout: String,
++    terminal: String,
++    name: String,
++    shown: bool,
++}
++pub struct AppWindow {
+     core: Arc<Core>,
+     runtime: Option<Rc<ShellRuntime>>,
+     restarting_mods: bool,
+@@ -394,7 +402,8 @@
+     agent_focused: Option<String>,
+     /// Panes showing another terminal for now (pane → address), e.g. a sub-agent
+     /// looked at in place of its parent. Not saved; the pane keeps its own.
+-    swapped: HashMap<String, String>,
++    swapped: HashMap<String, String>,
++    pane_bodies: HashMap<String, PaneBody>,
+     float_drag: Option<floats::FloatDrag>,
+     pane_drag: Option<pane_drag::PaneDrag>,
+     pane_grip_hover: Option<String>,
+@@ -532,7 +541,8 @@
+             layout_name: "main".into(),
+             agent: None,
+             agent_focused: None,
+-            swapped: HashMap::new(),
++            swapped: HashMap::new(),
++            pane_bodies: HashMap::new(),
+             float_drag: None,
+             pane_drag: None,
+             pane_grip_hover: None,
+@@ -1278,7 +1288,18 @@
+ 
+     // ---- making the screen match the model ---------------------------------
+ 
+-    /// Visible slots: terminal blocks (id → address) and mod slots (key → instance).
++    /// The stored body is only valid for its original terminal and layout.
++    fn pane_body(&self, pane: &str) -> Option<&PaneBody> {
++        self.pane_bodies.get(pane).filter(|b| {
++            b.layout == self.layout_name && self.model.address_of(pane).as_deref() == Some(b.terminal.as_str())
++        })
++    }
++
++    fn shown_pane_body(&self, pane: &str) -> Option<&PaneBody> {
++        self.pane_body(pane).filter(|b| b.shown && !self.swapped.contains_key(pane))
++    }
++
++    /// Visible slots: terminal blocks (id → address) and mod slots (key → instance).
+     fn visible(&self) -> (Vec<(String, String)>, Vec<(String, Instance)>) {
+         let mut terms = Vec::new();
+         let mut mods = Vec::new();
+@@ -1329,8 +1350,11 @@
+                 {
+                     mods.push(pane_header_mod(n, name, props));
+                 }
+-                visit(n, &mut terms, &mut mods);
+-                if let Some(a) = self.swapped.get(&n.id) {
++                visit(n, &mut terms, &mut mods);
++                if let Some(body) = self.shown_pane_body(&n.id) {
++                    mods.push(pane_body_mod(n, &body.name));
++                }
++                if let Some(a) = self.swapped.get(&n.id) {
+                     terms.push((format!("{}{SWAP}", n.id), a.clone()));
+                 }
+             }
+@@ -1388,12 +1412,16 @@
+                 if let Some(Content::Mod { name, props }) = n.content() {
+                     out.insert(n.id.clone(), inst(name, props));
+                 }
+-                if let Some((name, props)) = &header
+-                    && n.is_pane()
+-                {
+-                    let (slot, i) = pane_header_mod(n, name, props);
+-                    out.insert(slot, i);
+-                }
++                if let Some((name, props)) = &header
++                    && n.is_pane()
++                {
++                    let (slot, i) = pane_header_mod(n, name, props);
++                    out.insert(slot, i);
++                }
++                if let Some(body) = self.pane_body(&n.id) {
++                    let (slot, i) = pane_body_mod(n, &body.name);
++                    out.insert(slot, i);
++                }
+             }
+         }
+         for o in &self.overlays {
+@@ -1560,11 +1588,14 @@
+         self.refresh_link_handlers();
+         self.model.order_spaces();
+         let (model, live) = (&self.model, &self.live);
+-        self.swapped.retain(|p, a| model.address_of(p).is_some() && live.contains_key(a));
++        self.swapped.retain(|p, a| model.address_of(p).is_some() && live.contains_key(a));
++        self.pane_bodies.retain(|p, b| model.address_of(p).as_deref() == Some(b.terminal.as_str()));
+         let (mut terms, mods_visible) = self.visible();
+         let covered: HashSet<&str> = terms.iter().filter_map(|(slot, _)| slot.strip_suffix(SWAP)).collect();
+         let mut displayed: HashSet<String> = terms.iter().filter(|(slot, _)| !covered.contains(slot.as_str())).map(|(slot, _)| slot.clone()).collect();
+-        // Agent blocks reuse their agent's pane view even when its tab isn't shown.
++        // An alternate body hides only the terminal view, never detaches it.
++        displayed.retain(|id| self.shown_pane_body(id).is_none());
++        // Agent blocks reuse their agent's pane view even when its tab isn't shown.
+         if self.shows_agent()
+             && let Some(addr) = self.shown_agent()
+             && let Some(pane) = self.model.pane_of(&addr)
+@@ -1861,7 +1892,8 @@
+     }
+ 
+     fn pane_focus(&self, pane: &str, cx: &App) -> Option<FocusHandle> {
+-        self.pane_term(pane).map(|t| t.view.read(cx).focus_target(cx))
++        if self.shown_pane_body(pane).is_some() { return None; }
++        self.pane_term(pane).map(|t| t.view.read(cx).focus_target(cx))
+     }
+ 
+     fn view_mod(&self, name: &str) -> Option<&Found> {
+@@ -1967,8 +1999,9 @@
+                     panes.push(json!({
+                         "pane": p.id, "terminal": addr, "tab": ctx.id, "title": title.clone().unwrap_or_default(), "name": p.title,
+                         "cwd": self.cwds.get(addr), "branch": m.folder_info.get(addr).and_then(|f| f.branch.clone()),
+-                        "status": m.status(addr), "app": a.and_then(|a| a.app.clone()), "program": self.program(addr),
+-                        "focused": focused, "zoomed": zoomed, "movable": self.pane_movable(&p.id),
++                        "status": m.status(addr), "app": a.and_then(|a| a.app.clone()), "program": self.program(addr),
++                        "body_mod": self.shown_pane_body(&p.id).map(|b| &b.name),
++                        "focused": focused, "zoomed": zoomed, "movable": self.pane_movable(&p.id),
+                     }));
+                     let Some(status) = m.status(addr) else { continue };
+                     agents.push(json!({
+@@ -3341,8 +3374,27 @@
+                 self.model.remove_pane(&pane);
+                 self.close_terminals(addr.into_iter().collect(), cx);
+             }
+-            "pane.zoom" => {
+-                if let Some(pane) = Self::owned(a, "pane").or_else(|| self.model.focused_pane()) {
++            "pane.view" => {
++                let Some(pane) = Self::owned(a, "pane") else { return self.fail("pane.view needs pane") };
++                let Some(terminal) = self.model.address_of(&pane) else { return self.fail("pane.view needs an existing terminal pane") };
++                if let Some(name) = Self::owned(a, "mod") {
++                    if self.view_mod(&name).is_none() { return self.fail("pane.view needs an installed view mod"); }
++                    if self.swapped.contains_key(&pane) { return self.fail("restore the pane's own terminal before changing its view"); }
++                    self.pane_bodies.insert(pane.clone(), PaneBody {
++                        layout: self.layout_name.clone(), terminal, name, shown: true,
++                    });
++                } else if let Some(body) = self.pane_bodies.get_mut(&pane) {
++                    body.shown = false;
++                }
++                // Transfer focus through the existing sync path. The terminal
++                // process and its attached TerminalView stay in the model.
++                if self.model.focused_pane().as_deref() == Some(pane.as_str()) {
++                    self.focused_pane = None;
++                    self.focused_block = None;
++                }
++            }
++            "pane.zoom" => {
++                if let Some(pane) = Self::owned(a, "pane").or_else(|| self.model.focused_pane()) {
+                     self.model.toggle_zoom(&pane);
+                 }
+             }
+@@ -4553,7 +4605,7 @@
+         }
+         if let Some(p) = &self.focused_pane {
+             // Pane selection survives an input, float or dialog taking the keyboard.
+-            if self.pane_term(p).is_some_and(|t| !t.view.read(cx).owns_keyboard_focus(window, cx)) {
++            if self.shown_pane_body(p).is_none() && self.pane_term(p).is_some_and(|t| !t.view.read(cx).owns_keyboard_focus(window, cx)) {
+                 return out;
+             }
+             if let Some(c) = self.model.active_tab()
+@@ -4631,7 +4683,11 @@
+         }
+         let el = match &n.kind {
+             Kind::Block { content } => {
+-                let inner = self.render_block(n, content, focused, rendered_dividers, cx);
++                let inner = if self.shown_pane_body(&n.id).is_some() {
++                    self.render_slot(&format!("{}#body", n.id), cx)
++                } else {
++                    self.render_block(n, content, focused, rendered_dividers, cx)
++                };
+                 match frame.filter(|_| n.is_pane()) {
+                     Some(f) => el.child(self.frame_pane(n, f, focused.contains(&n.id), inner, cx)),
+                     None => el.child(inner),
+@@ -4747,14 +4803,15 @@
+         let in_overlay = slot.starts_with("overlay:") || self.overlays.iter().any(|o| o.layout.as_ref().is_some_and(|l| l.find(slot).is_some()));
+         // A mod that is a pane in a tab: a click makes it the focused pane, and the
+         // keyboard is its own (an editor, a board), like a terminal's.
+-        let in_pane = self.model.tab_of(slot).is_some();
+-        match self.copies.get(slot) {
++        let pane = slot.strip_suffix("#body").unwrap_or(slot);
++        let in_pane = self.model.tab_of(pane).is_some();
++        match self.copies.get(slot) {
+             Some(Copy { root: Some(root), inst, .. }) => div()
+                 .size_full()
+                 .key_context(key_context("Mod", "mod", &inst.name))
+                 .when(in_pane, |d| {
+-                    let id = slot.to_owned();
+-                    d.on_any_mouse_down(cx.listener(move |this, _, _, cx| {
++                    let id = pane.to_owned();
++                    d.on_any_mouse_down(cx.listener(move |this, _, _, cx| {
+                         if this.focused_pane.as_deref() != Some(id.as_str()) {
+                             this.model.focus_pane(&id);
+                             this.focused_pane = Some(id.clone());
+@@ -5460,7 +5517,15 @@
+     (floats::slot(id), Instance { name: name.to_owned(), props })
+ }
+ 
+-/// A pane header's slot and copy, told which pane it sits on (a mod pane has no terminal).
++/// Alternate body slot shares the original pane/terminal identity.
++fn pane_body_mod(n: &Node, name: &str) -> (String, Instance) {
++    (format!("{}#body", n.id), Instance {
++        name: name.to_owned(),
++        props: json!({ "pane": n.id, "terminal": n.terminal(), "paneBody": true }),
++    })
++}
++
++/// A pane header's slot and copy, told which pane it sits on (a mod pane has no terminal).
+ fn pane_header_mod(n: &Node, name: &str, props: &Value) -> (String, Instance) {
+     let mut props = if props.is_object() { props.clone() } else { json!({}) };
+     props["pane"] = json!(n.id);
+diff --git a/src/commands.rs b/src/commands.rs
+--- a/src/commands.rs
++++ b/src/commands.rs
+@@ -56,7 +56,8 @@
+     cmd("tab.unsettle", &[opt("id")], "Bring a settled tab back to the lists."),
+     cmd("tab.next", &[], "Show the next tab."),
+     cmd("tab.prev", &[], "Show the previous tab."),
+-    cmd("pane.zoom", &[opt("pane")], "Show only this pane of its tab, or all again."),
++    cmd("pane.zoom", &[opt("pane")], "Show only this pane of its tab, or all again."),
++    cmd("pane.view", &[req("pane"), opt("mod")], "Show a mod in an existing terminal pane; omit mod to show its terminal."),
+     cmd("pane.rename", &[opt("pane"), opt("name")], "Name a pane (default: the focused one; asks the person when no name; an empty name: unnamed again)."),
+     cmd("pane.focus", &[opt("pane"), opt("terminal")], "Focus a pane (or the pane showing a terminal)."),
+     cmd("pane.go", &[req("direction")], "Focus the pane or focusable mod to the \"left\", \"right\", \"up\" or \"down\"."),
