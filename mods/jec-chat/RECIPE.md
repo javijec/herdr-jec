@@ -1,4 +1,4 @@
-# jec-chat v0.4 — alcance y contrato
+# jec-chat v0.5 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 
@@ -7,10 +7,18 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 1. Activar el layout `jec-chat` (el instalador intenta hacerlo).
 2. Seleccionar una terminal Codex local; el encabezado `jec-pane` ofrece el botón **Chat**.
 3. Chat y Terminal son bloques de un `stack` del layout, así que el mismo terminal sigue funcionando. La selección se vincula al pane y su dirección exacta; al cambiar de tab, el chat no muestra datos de la pestaña anterior.
-4. El lector Node local busca `session_meta.payload.cwd` en los rollout de Codex.
-5. Al abrir Chat, consulta `hc get --json <terminal>` y `hc read <terminal> --lines 80`. Intenta identificar la sesión por UUID explícito en `codex resume <UUID>` o una respuesta distintiva que coincida con la pantalla real. Si hay varias coincidencias o evidencia insuficiente, aparece el selector. Ninguna: aviso.
+4. Consulta `hc get <terminal> --json`. Si existe `jec.chat.codex`, valida UUID, ruta canónica dentro de sessions y cwd; abre solo ese archivo. Si todavía no hay JSONL, espera a que el hook publique la ruta.
+5. Sin registro, conserva el mecanismo anterior: búsqueda por cwd y comparación con `hc read <terminal> --lines 80` o UUID explícito. Si hay ambigüedad, aparece el selector.
 6. Renderiza mensajes y herramientas del JSONL con `TextView.markdown`.
 7. **Terminal** cambia al bloque original `main` sin detener nada; la sesión seleccionada se conserva al alternar. La paleta sigue abriendo la ventana de chat anterior en el layout base.
+
+## Registro directo
+
+Los hooks de Codex 0.170.0 reciben `session_id`, `transcript_path` y `cwd`. El script `session-hook.cjs` lee el JSON por stdin y usa `HC_TERMINAL_ID` y `hc label` para vincular el thread raíz con la terminal. `SessionStart` registra el UUID, `UserPromptSubmit` y `Stop` actualizan la ruta, `SessionEnd` borra el registro si sigue correspondiendo al mismo UUID. No se guardan prompts ni respuestas. No hay base de datos adicional. Los errores no bloquean al agente.
+
+`install-hooks.cjs` agrega los hooks preservando los existentes; crea backup antes de reemplazar el archivo, verifica que el original no cambió durante la escritura y no duplica entradas idénticas. La aprobación se hace en `/hooks`. El funcionamiento depende de la herencia de `HC_TERMINAL_ID` y del acceso a `hc` desde el hook. Usar Codex con `--no-daemon` para evitar que el servidor compartido registre otra terminal.
+
+Si la etiqueta cambia con /new o /resume, la lectura periódica abre el nuevo archivo sin recorrer el historial. El selector manual es una salida de emergencia, no una fuente de identidad.
 
 ## Integración visual
 
