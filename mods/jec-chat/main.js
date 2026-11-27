@@ -136,7 +136,7 @@ export default class JecChat extends View {
     this.refresh(cx);
   }
   refresh(cx) {
-    if ((!this.selected && !this.pendingRegistration) || this.reading || this.closed || this.loading) return;
+    if ((!this.selected && !this.pendingRegistration) || this.reading || this.closed) return;
     if (this.registered) { this.refreshRegistered(cx); return; }
     this.reading = true;
     const file = this.selected.file, seq = this.seq, readSeq = ++this.readSeq;
