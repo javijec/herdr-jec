@@ -11,7 +11,7 @@ En el layout personal `jec-chat`, las terminales locales de Codex muestran un bo
 - Con los hooks autorizados, Codex registra directamente el UUID y la ruta del JSONL en la etiqueta `jec.chat.codex` de su terminal Herdr. Chat abre ese archivo sin recorrer sesiones ni comparar texto.
 - Para sesiones antiguas o sin hooks activos, se conserva el detector anterior (respuesta visible o UUID explícito) y el selector manual.
 - Refresca la conversacion cada 4 segundos mientras esta abierta.
-- Composer nativo de varias líneas, con borradores en memoria separados por terminal y UUID. **Enviar** usa `hc send --if idle`; requiere registro directo y no inicia otro Codex.
+- Composer nativo de varias líneas, con borradores en memoria separados por terminal y UUID. **Enviar** usa `hc send --if idle` cuando el agente está idle y `hc send` sin `--force` cuando está done; requiere registro directo y no inicia otro Codex.
 - Los prompts enviados y respuestas aparecen cuando Codex escribe el JSONL. El botón Enviar no está disponible mientras trabaja o espera permisos.
 - Por ahora solo local: máquinas remotas y aprobaciones interactivas quedan para siguientes versiones.
 
@@ -42,7 +42,7 @@ Si Codex no fue reconocido automáticamente, todavía podés abrir el chat desde
 
 ### Enviar mensajes desde Chat
 
-Con `registro Codex` visible y el agente en estado idle, escribí un mensaje y pulsá **Enviar**. Enter agrega una línea. No uses el composer para comandos slash, comandos del shell ni solicitudes de permisos: volvé a **Terminal** para eso. Si el envío falla, el texto se conserva y no se reintenta automáticamente; comprobá la TUI antes de reenviar. El envío exige una versión de Herdr Core con `hc send --if idle` (ver `hc send --help`).
+Con `registro Codex` visible y el agente en estado idle o done, escribí un mensaje y pulsá **Enviar**. Enter agrega una línea. No uses el composer para comandos slash, comandos del shell ni solicitudes de permisos: volvé a **Terminal** para eso. Si el envío falla, el texto se conserva y no se reintenta automáticamente; comprobá la TUI antes de reenviar. El envío exige una versión de Herdr Core con `hc send --if idle` (ver `hc send --help`).
 
 Al actualizar desde la v0.5 ya funcional no es necesario reautorizar hooks si el instalador no modifica sus comandos.
 
