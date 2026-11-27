@@ -4,6 +4,7 @@ import { View, div, image, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { theme, run, props, window, shared, setShared, updates, layout, machines } from "herdr";
 import { machineOverview } from "./machine-overview.js";
+import { chromeOptions } from "./preferences.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -36,6 +37,7 @@ export default class WorkspaceChrome extends View {
     const t = theme();
     const collapsed = narrow();
     if (props()?.footer) {
+      const options = chromeOptions(props());
       const overview = machineOverview(machines());
       const row = (id, icon, label, dim, action, hint = label) => h_flex().id(id).h(28).px(8).gap(9).items_center().rounded(8).tooltip(hint)
         .when(collapsed, el => el.relative().w(32).px(0).justify_center())
@@ -47,9 +49,9 @@ export default class WorkspaceChrome extends View {
         .when(collapsed, el => el.px(0).items_center())
         .child(row("settings", "settings", "Settings", false, () => run("app.settings"))
           .when(Boolean(updates().app.ready), el => el.child(collapsed ? ready.absolute().top(5).right(6) : ready)))
-        .child(row("jec-machines-settings", "server", "Machines", false, () => run("app.settings", { section: "machines" }), overview.hint)
+        .when(options.machines, el => el.child(row("jec-machines-settings", "server", "Machines", false, () => run("app.settings", { section: "machines" }), overview.hint)
           .when(!collapsed && overview.total > 0, el => el.child(div().flex_1()).child(div().flex_none().text_size(10).text_color(t.dim).child(`${overview.ready}/${overview.total}`)))
-          .when(collapsed && overview.unavailable > 0, el => el.child(div().absolute().right(4).top(4).size(6).rounded_full().bg(t.blocked))))
+          .when(collapsed && overview.unavailable > 0, el => el.child(div().absolute().right(4).top(4).size(6).rounded_full().bg(t.blocked)))))
         .child(row("machine", "plus", "Add machine", true, () => run("mod.open", { name: "machine-add" })));
     }
     return h_flex().size_full().bg(t.chrome).pl(collapsed ? 6 : 14).pr(10).gap(4).items_center().text_size(13.5)

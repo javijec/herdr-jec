@@ -191,6 +191,36 @@ changes.push(...[
     "      .child(v_flex().id(\"ag-list\").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode(\"always\").children(rows)\n        .when(!collapsed && unreported.length > 0, el => el.child(div().px(8).pt(8).pb(4).text_size(11).text_color(t.dim)\n          .tooltip(\"Recognized foreground programs without a reported agent status. Not counted as agents.\").child(`No status · ${unreported.length}`))\n          .children(unreported.map(p => h_flex().id(`no-status-${p.address}`).h(26).px(8).gap(6).items_center().rounded(6)\n            .cursor_pointer().hover(s=>s.bg(t.hover)).tooltip(`${p.provider} · ${p.title} · No reported state`)\n            .on_click(()=>run(\"pane.focus\",{pane:p.pane}))\n            .child(svg(\"mods/workspace-chrome/terminal.svg\").size(13).flex_none().text_color(t.dim))\n            .child(div().flex_1().truncate().text_color(t.muted).child(p.provider))\n            .child(div().flex_none().text_size(10).text_color(t.dim).child(\"No status\"))))))"
   ]
 ]);
+changes.push(...[
+  [
+    "import { providerOf, nativeDetails, unreportedPanes } from \"./providers.js\";",
+    "import { providerOf, nativeDetails, unreportedPanes } from \"./providers.js\";\nimport { agentsOptions } from \"./preferences.js\";"
+  ],
+  [
+    "    const elapsed = this.activity.get(k.address);",
+    "    const options = agentsOptions(props());\n    const elapsed = options.durations ? this.activity.get(k.address) : null;"
+  ],
+  [
+    ".when(report.progress !== null, el => el.child(div().mr(4)",
+    ".when(options.progress && report.progress !== null, el => el.child(div().mr(4)"
+  ],
+  [
+    "    const unreported = unreportedPanes(paneSnapshot,this.snapshot.states,this.snapshot.terminalByAddress);",
+    "    const options = agentsOptions(props());\n    const unreported = options.unreported ? unreportedPanes(paneSnapshot,this.snapshot.states,this.snapshot.terminalByAddress) : [];"
+  ],
+  [
+    "      const elapsed = this.activity.get(a.address);",
+    "      const elapsed = options.durations ? this.activity.get(a.address) : null;"
+  ],
+  [
+    ".when(this.hovered !== a.address && (Boolean(elapsed) || Boolean(when)),",
+    ".when(options.durations && this.hovered !== a.address && (Boolean(elapsed) || Boolean(when)),"
+  ],
+  [
+    ".when(report.progress !== null, el => el.child(div().flex_none()",
+    ".when(options.progress && report.progress !== null, el => el.child(div().flex_none()"
+  ]
+]);
 const prefix="// Based on official Herdr Agents @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa; Apache-2.0 (LICENSE.herdr).\n// JEC v0.2: deduplicated activity counts and visible group/subagent counts.\n";
 function derive(source){
  let s=source.replace(/\r\n/g,"\n");

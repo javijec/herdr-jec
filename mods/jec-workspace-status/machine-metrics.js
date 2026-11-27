@@ -51,13 +51,22 @@ export async function probe(exec, on, preferred) {
 }
 const pct = n => n === null || n === undefined ? "—" : Math.round(n)+"%";
 const gib = n => (n / 1073741824).toFixed(1)+" GiB";
-export function describeMetrics(entry, now, name) {
-  if (!entry?.data || now-entry.at > STALE_MS) {
+export function describeMetrics(entry, now, name, options={}) {
+  const on=k=>options[k]!==false;
+  if (!entry?.data || now-entry.at > (options.staleMs??STALE_MS)) {
     const state = entry?.failed ? "Metrics unavailable" : "Metrics pending";
     return {text:state, hint:name+" · "+state+" · No current sample", available:false};
   }
   const d=entry.data;
-  const text = "CPU "+pct(d.cpu)+" · RAM "+pct(d.ram?.percent)+" · Disk "+pct(d.disk?.percent)+(d.temp===null?"":" · "+Math.round(d.temp)+"°C");
+  const parts=[], hints=[name];
   const detail = (label,p) => p ? label+" "+gib(p.used)+" / "+gib(p.total) : label+" unavailable";
-  return {text, hint:[name, "CPU "+pct(d.cpu), detail("RAM",d.ram), detail(entry.platform==="windows"?"System drive":"Root /",d.disk), d.temp===null?"CPU temperature unavailable":"CPU temperature "+d.temp.toFixed(1)+"°C", "Sample "+Math.max(0,Math.floor((now-entry.at)/1000))+"s ago"].join(" · "),available:true};
+  if(on("cpu")){parts.push("CPU "+pct(d.cpu));hints.push("CPU "+pct(d.cpu));}
+  if(on("ram")){parts.push("RAM "+pct(d.ram?.percent));hints.push(detail("RAM",d.ram));}
+  if(on("disk")){parts.push("Disk "+pct(d.disk?.percent));hints.push(detail(entry.platform==="windows"?"System drive":"Root /",d.disk));}
+  if(on("temperature")){
+    if(d.temp!==null)parts.push(Math.round(d.temp)+"°C");
+    hints.push(d.temp===null?"CPU temperature unavailable":"CPU temperature "+d.temp.toFixed(1)+"°C");
+  }
+  hints.push("Sample "+Math.max(0,Math.floor((now-entry.at)/1000))+"s ago");
+  return {text:parts.join(" · ")||"Metrics unavailable",hint:hints.join(" · "),available:true};
 }

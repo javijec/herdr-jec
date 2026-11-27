@@ -59,6 +59,52 @@ changes.push(...[
     "      .child(div().flex_1().min_w(0))\n      .when(Boolean(space) && context.state === \"ready\", el => el.child(div().id(\"jec-metrics\").min_w(0).max_w(260).truncate().text_color(machineMetrics.available ? t.muted : t.dim).tooltip(machineMetrics.hint).child(machineMetrics.text)))\n      .child(div().id(\"palette\")"
   ]
 ]);
+changes.push(...[
+  [
+    "import { spaces, agents, terminals, machines, theme, run, window, keys, exec, checking } from \"herdr\";",
+    "import { spaces, agents, terminals, machines, theme, run, window, keys, exec, checking, props } from \"herdr\";\nimport { statusOptions } from \"./preferences.js\";"
+  ],
+  [
+    "import { probe, describeMetrics, REFRESH_MS, RETRY_MS } from \"./machine-metrics.js\";",
+    "import { probe, describeMetrics, RETRY_MS } from \"./machine-metrics.js\";"
+  ],
+  [
+    "    if (checking()) return;",
+    "    if (checking()) return;\n    const options = statusOptions(props());\n    if (!options.metrics || !(options.cpu || options.ram || options.disk || options.temperature)) return;"
+  ],
+  [
+    "    if (checking() || !window()?.visible || !window()?.active || this.metricsBusy) return;",
+    "    const options = statusOptions(props());\n    if (!options.metrics || !(options.cpu || options.ram || options.disk || options.temperature) || checking() || !window()?.visible || !window()?.active || this.metricsBusy) return;"
+  ],
+  [
+    "at + REFRESH_MS",
+    "at + options.refreshMs"
+  ],
+  [
+    "    const machineMetrics = describeMetrics(this.metrics?.get(space?.machine ?? null), Date.now(), context.machineName);",
+    "    const options = statusOptions(props());\n    const machineMetrics = describeMetrics(this.metrics?.get(space?.machine ?? null), Date.now(), context.machineName, options);"
+  ],
+  [
+    ".when(Boolean(space), el => el.child(h_flex().min_w(0).gap(5)",
+    ".when(options.space && Boolean(space), el => el.child(h_flex().min_w(0).gap(5)"
+  ],
+  [
+    ".when(Boolean(space?.branch), el => el.child(h_flex()",
+    ".when(options.branch && Boolean(space?.branch), el => el.child(h_flex()"
+  ],
+  [
+    "      .child(h_flex().gap(6).items_center().flex_none().tooltip(summaryLabel(summary))",
+    "      .when(options.agentSummary, el => el.child(h_flex().gap(6).items_center().flex_none().tooltip(summaryLabel(summary))"
+  ],
+  [
+    ".when(needs > 0, el => el.child(div().text_color(t.blocked).child(`· ${needs} ${needs === 1 ? \"needs\" : \"need\"} you`))))",
+    ".when(needs > 0, el => el.child(div().text_color(t.blocked).child(`· ${needs} ${needs === 1 ? \"needs\" : \"need\"} you`)))))"
+  ],
+  [
+    ".when(Boolean(space) && context.state === \"ready\", el => el.child(div().id(\"jec-metrics\")",
+    ".when(options.metrics && (options.cpu || options.ram || options.disk || options.temperature) && Boolean(space) && context.state === \"ready\", el => el.child(div().id(\"jec-metrics\")"
+  ]
+]);
 const prefix="// Based on official Herdr Workspace Status @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa; Apache-2.0 (LICENSE.herdr).\n// JEC v0.3: active machine availability and workspace context.\n";
 function derive(source){
  let s=source.replace(/\r\n/g,"\n");

@@ -31,6 +31,24 @@ const changes=[
     ".size(15), toggleSidebar, collapsed ? \"Expand sidebar\" : \"Collapse sidebar\")));"
   ]
 ];
+changes.push(...[
+  [
+    "import { machineOverview } from \"./machine-overview.js\";",
+    "import { machineOverview } from \"./machine-overview.js\";\nimport { chromeOptions } from \"./preferences.js\";"
+  ],
+  [
+    "      const overview = machineOverview(machines());",
+    "      const options = chromeOptions(props());\n      const overview = machineOverview(machines());"
+  ],
+  [
+    "        .child(row(\"jec-machines-settings\",",
+    "        .when(options.machines, el => el.child(row(\"jec-machines-settings\","
+  ],
+  [
+    ".bg(t.blocked))))\n        .child(row(\"machine\"",
+    ".bg(t.blocked)))))\n        .child(row(\"machine\""
+  ]
+]);
 const prefix="// Based on official Herdr Workspace Chrome @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa; Apache-2.0 (LICENSE.herdr).\n// JEC v0.4: direct machine settings, layout readiness and navigation hints.\n";
 function derive(source){
  let s=source.replace(/\r\n/g,"\n");

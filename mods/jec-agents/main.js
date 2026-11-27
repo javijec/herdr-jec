@@ -7,6 +7,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { agentSummary, summaryLabel } from "./agent-summary.js";
 import { activitySnapshot, trackActivity, observedDuration, activityHint, descendants, groupActivity, machineName } from "./activity.js";
 import { providerOf, nativeDetails, unreportedPanes } from "./providers.js";
+import { agentsOptions } from "./preferences.js";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout } from "herdr";
 
 function find(node, id) {
@@ -188,7 +189,8 @@ export default class Agents extends View {
     const st = kidStatus(k, this.listed);
     const pic = icon(k.program, 14, t.foreground);
     const on = k.address === shown;
-    const elapsed = this.activity.get(k.address);
+    const options = agentsOptions(props());
+    const elapsed = options.durations ? this.activity.get(k.address) : null;
     const parent = this.snapshot.terminalByAddress.get(k.parent);
     const parentName = parent?.name || parent?.program?.name || k.parent || "Unknown";
     const report = nativeDetails(k);
@@ -212,7 +214,7 @@ export default class Agents extends View {
       .when(Boolean(pic), el => el.child(div().mr(8).child(pic)))
       .child(div().flex_1().truncate().text_color(on ? t.foreground : t.muted).child(k.name || k.template || k.program?.name || k.address))
       .when(Boolean(elapsed), el => el.child(div().ml(4).mr(4).flex_none().text_size(10).text_color(st==="blocked"?t.blocked:t.dim).child(observedDuration(elapsed,this.now))))
-      .when(report.progress !== null, el => el.child(div().mr(4).flex_none().text_size(10).text_color(t.dim).child(`${report.progress}%`)))
+      .when(options.progress && report.progress !== null, el => el.child(div().mr(4).flex_none().text_size(10).text_color(t.dim).child(`${report.progress}%`)))
       .child(this.status(t, { status: st }, compact));
   }
 
@@ -307,7 +309,8 @@ export default class Agents extends View {
     // Read the pane snapshot once: every host read copies the whole list into JS.
     const paneSnapshot = panes();
     const leads = leadPanes(paneSnapshot);
-    const unreported = unreportedPanes(paneSnapshot,this.snapshot.states,this.snapshot.terminalByAddress);
+    const options = agentsOptions(props());
+    const unreported = options.unreported ? unreportedPanes(paneSnapshot,this.snapshot.states,this.snapshot.terminalByAddress) : [];
     const tabs = new Map(sp.flatMap(s => s.tabs).map(tab => [tab.id, tab]));
     const labels = new Map(list.map(a => {
       const tab = tabs.get(a.tab);
@@ -327,7 +330,7 @@ export default class Agents extends View {
       const more = detail.get(a.address);
       // An agent on another machine (`vps/t7`) says which.
       const machine = machineName(a,spaceById);
-      const elapsed = this.activity.get(a.address);
+      const elapsed = options.durations ? this.activity.get(a.address) : null;
       const inheritedBlocked = a.status !== "blocked" && rankOf(a) === RANK.blocked;
       const report = nativeDetails(this.snapshot.terminalByAddress.get(a.address));
       const rowHint = [provider(a), a.space_name, label(a), machine ?? "This computer", activityHint(elapsed,now), inheritedBlocked ? "Subagent needs attention" : "",report.hint].filter(Boolean).join(" · ");
@@ -402,8 +405,8 @@ export default class Agents extends View {
         .when(Boolean(machine) && (!byMachine || isPinned), el => el.child(div().max_w(55).truncate().text_size(10).text_color(t.dim).child(machine)))
         .when(subs.length > 0, el => el.child(fold(a, subs)))
         .when(this.hovered === a.address, el => el.child(pin))
-        .when(this.hovered !== a.address && (Boolean(elapsed) || Boolean(when)), el => el.child(div().flex_none().text_size(10).text_color(elapsed?.status==="blocked"?t.blocked:t.dim).child(elapsed?observedDuration(elapsed,now):duration(Math.max(0,now-when)))))
-        .when(report.progress !== null, el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(`${report.progress}%`)))
+        .when(options.durations && this.hovered !== a.address && (Boolean(elapsed) || Boolean(when)), el => el.child(div().flex_none().text_size(10).text_color(elapsed?.status==="blocked"?t.blocked:t.dim).child(elapsed?observedDuration(elapsed,now):duration(Math.max(0,now-when)))))
+        .when(options.progress && report.progress !== null, el => el.child(div().flex_none().text_size(10).text_color(t.dim).child(`${report.progress}%`)))
         .child(this.status(t, inheritedBlocked ? {status:"blocked"} : a, byPriority && !isPinned));
     };
 
