@@ -57,6 +57,12 @@ test("send verifies the registered session and idle status, then sends the liter
   const prompt = 'Hola, "Codex".\nSegunda línea';
   assert.equal((await sendPrompt(target,session,prompt)).started,true);
   assert.deepEqual(calls,[["get","t1q","--json"],["send","--if","idle","--json","--","t1q",prompt]]);
+  calls.length = 0;
+  record.status = "done";
+  record.report = {state:"idle"};
+  assert.equal((await sendPrompt(target,session,prompt)).started,true);
+  assert.deepEqual(calls,[["get","t1q","--json"],["send","--json","--","t1q",prompt]]);
+  delete record.report;
   for (const state of ["working","blocked","error",null]) {
     calls.length = 0;
     record.status = state;
@@ -89,9 +95,10 @@ test("send rejects manual history, remote targets, shell commands, and terminal 
   await assert.rejects(sendPrompt(target,null,"hola"),/terminal local/);
 });
 
-test("core status uses the actual report instead of a derived UI state", async () => {
+test("core status uses the explicit status before report fallback", async () => {
   const { terminalStatus } = await provider();
-  assert.equal(terminalStatus({status:"done",report:{state:"idle"}}),"idle");
+  assert.equal(terminalStatus({status:"done",report:{state:"idle"}}),"done");
+  assert.equal(terminalStatus({report:{state:"idle"}}),"idle");
   assert.equal(terminalStatus({status:{state:"working"}}),"working");
   assert.equal(terminalStatus({status:"IDLE"}),"idle");
   assert.equal(terminalStatus({}),null);
