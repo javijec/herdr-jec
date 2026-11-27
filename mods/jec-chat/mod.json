@@ -1,0 +1,20 @@
+{
+  "place": "none",
+  "title": "JEC Chat",
+  "focusable": true,
+  "overlay": {
+    "kind": "dialog",
+    "width": 1000,
+    "height": 740
+  },
+  "palette": [
+    {
+      "title": "JEC Chat: ver conversacion de Codex",
+      "command": "mod.open",
+      "args": {
+        "name": "jec-chat"
+      },
+      "words": "chat codex transcript sesion historial"
+    }
+  ]
+}
