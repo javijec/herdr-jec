@@ -16,9 +16,12 @@ async function load() {
     "registeredSession","listSessions","resolveCurrentSession","readSession","terminalStatus",
     "sendPrompt","interruptPrompt","blockedScreen"
   ].map(name => 'export const '+name+' = (...args)=>globalThis.__jecProviderCalls.push(['+JSON.stringify(name)+',...args]);').join("\n");
+  const opencode = ["identify","read","status","send","interrupt","blockedPreview"].map(name =>
+    'export const '+name+' = (...args)=>globalThis.__jecProviderCalls.push(["opencode.'+name+'",...args]);').join("\n");
   globalThis.__jecProviderCalls = calls;
   const registry = await import(moduleUrl(read("mods/jec-chat/providers/index.js")
     .replace('"./codex.js"',JSON.stringify(moduleUrl(codex)))
+    .replace('"./opencode.js"',JSON.stringify(moduleUrl(opencode)))
     .replace('"../provider-catalog.js"',JSON.stringify(catalogUrl))));
   return { catalog, target, registry, calls };
 }
@@ -52,9 +55,10 @@ test("registry does not fall back to Codex for known unsupported agents or remot
   const {registry} = await load();
   const provider=registry.providerFor(local("codex"));
   assert.equal(provider.id,"codex");
-  assert.equal(registry.providerFor(local("opencode")),null);
+  assert.equal(registry.providerFor(local("opencode")).id,"opencode");
   assert.equal(registry.providerFor(local("pi"),true),null);
-  assert.equal(registry.providerFor(local("opencode"),true),null);
+  assert.equal(registry.providerFor({...local("opencode"),terminal:"server/t1y"}),null);
+  assert.equal(registry.providerFor(local("opencode"),true).id,"opencode");
   assert.equal(registry.providerFor({...local("codex"),terminal:"server/t1y"},true),null);
   assert.equal(registry.providerFor({...local(null),machine:"remote"},true),null);
   assert.equal(registry.providerFor(local(null),true).id,"codex");
@@ -93,4 +97,15 @@ test("view depends on the registry, not on a concrete agent", ()=>{
   assert.doesNotMatch(main,/from "\.\/providers\/codex\.js"/);
   assert.match(main,/provider\.identify\(target\)/);
   assert.match(main,/provider\.send\(target, session, prompt, current\)/);
+});
+
+test("OpenCode adapter uses its own direct registration, no discovery or Codex fallback", async ()=>{
+  const {registry,calls} = await load();
+  const target=local("opencode"), provider=registry.providerFor(target), session={id:"ses_123",generation:"generation"};
+  assert.equal(provider.capabilities.discovery,false);
+  assert.equal(registry.allowsAction(target,provider,session,true,"send"),true);
+  assert.equal(registry.allowsAction(target,provider,session,true,"approval"),false);
+  await provider.identify(target);
+  await provider.send(target,session,"hola");
+  assert.deepEqual(calls,[["opencode.identify",target],["opencode.send",target,session,"hola"]]);
 });
