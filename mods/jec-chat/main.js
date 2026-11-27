@@ -2,7 +2,7 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
-import { listSessions, readSession, resolveCurrentSession } from "./providers/codex.js";
+import { listSessions, readSession, resolveCurrentSession, registeredSession } from "./providers/codex.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -51,12 +51,13 @@ export default class JecChat extends View {
     this.loading = false; this.reading = false; this.error = null;
     this.matchMethod = null; this.previousView = this.embedded ? activeView(layout()) : null;
     this.manual = false; this.stale = false; this.more = false;
+    this.registered = false; this.pendingRegistration = null;
     this.scroll = ScrollHandle.new();
     this.closed = false; this.seq = 0; this.readSeq = 0;
     if (this.target.terminal && this.target.cwd && !this.target.machine && this.target.isCodex) this.scan(cx);
     if (this.embedded) cx.timer.every(400, cx => this.syncTarget(cx));
     cx.timer.every(4000, (cx) => {
-      if (!this.closed && this.selected && !this.reading && appWindow()?.visible !== false
+      if (!this.closed && (this.selected || this.pendingRegistration) && !this.reading && !this.loading && appWindow()?.visible !== false
           && (!this.embedded || activeView(layout()) === "jec-chat-view")) this.refresh(cx);
     });
   }
@@ -76,6 +77,7 @@ export default class JecChat extends View {
       this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
       this.manual = false; this.error = null; this.loading = false; this.reading = false;
       this.seq++; this.readSeq++; this.more = false; this.stale = false; this.matchMethod = null;
+      this.registered = false; this.pendingRegistration = null;
       if (next?.isCodex && next.cwd) this.scan(cx);
       cx.notify();
     }
@@ -87,18 +89,23 @@ export default class JecChat extends View {
     // Another tab/agent was selected while Chat was active.
     if (!next && view === "jec-chat-view") this.back();
   }
-  scan(cx) {
+  scan(cx, forcePicker = false) {
     if (this.loading || !this.target.cwd || this.target.machine) return;
     this.loading = true; this.error = null; this.selected = null;
-    this.matchMethod = null;
+    this.matchMethod = null; this.registered = false; this.pendingRegistration = null;
     this.messages = []; this.total = 0; this.readSeq++; this.reading = false;
     const seq = ++this.seq;
     cx.spawn(async cx => {
       try {
+        if (!forcePicker && this.target.isCodex && this.target.terminal) {
+          const direct = await registeredSession(this.target.cwd, this.target.terminal);
+          if (seq !== this.seq || this.closed) return;
+          if (direct) { this.acceptRegistration(direct); return; }
+        }
         const result = await listSessions(this.target.cwd);
         if (seq !== this.seq || this.closed) return;
         this.sessions = result.sessions ?? []; this.more = Boolean(result.limited || result.total > this.sessions.length);
-        if (this.sessions.length && this.target.isCodex && this.target.terminal) {
+        if (!forcePicker && this.sessions.length && this.target.isCodex && this.target.terminal) {
           const match = await resolveCurrentSession(this.target.cwd, this.target.terminal, this.sessions);
           if (seq !== this.seq || this.closed) return;
           if (match?.session) {
@@ -110,13 +117,27 @@ export default class JecChat extends View {
       finally { if (seq === this.seq) { this.loading = false; cx.notify(); } }
     });
   }
+  acceptRegistration(direct) {
+    this.registered = true;
+    this.pendingRegistration = direct.pending ? direct.id : null;
+    this.sessions = []; this.more = false;
+    this.selected = direct.session ?? null;
+    this.matchMethod = direct.method ?? "registro Codex";
+    this.messages = direct.data?.messages ?? [];
+    this.total = direct.data?.total ?? this.messages.length;
+    this.stale = Boolean(direct.data?.truncated);
+    this.error = null;
+    this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
+  }
   choose(session, cx) {
+    this.registered = false; this.pendingRegistration = null;
     this.selected = session; this.messages = []; this.total = 0; this.error = null;
     this.readSeq++; this.reading = false;
     this.refresh(cx);
   }
   refresh(cx) {
-    if (!this.selected || this.reading || this.closed) return;
+    if ((!this.selected && !this.pendingRegistration) || this.reading || this.closed || this.loading) return;
+    if (this.registered) { this.refreshRegistered(cx); return; }
     this.reading = true;
     const file = this.selected.file, seq = this.seq, readSeq = ++this.readSeq;
     cx.spawn(async cx => {
@@ -128,6 +149,28 @@ export default class JecChat extends View {
         this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
       } catch (e) { if (seq === this.seq && readSeq === this.readSeq) this.error = String(e?.message ?? e); }
       finally { if (seq === this.seq && readSeq === this.readSeq) { this.reading = false; cx.notify(); } }
+    });
+  }
+  refreshRegistered(cx) {
+    this.reading = true;
+    const seq = this.seq, readSeq = ++this.readSeq;
+    const target = this.target;
+    cx.spawn(async cx => {
+      try {
+        const direct = await registeredSession(target.cwd, target.terminal);
+        if (this.closed || seq !== this.seq || readSeq !== this.readSeq) return;
+        if (direct) this.acceptRegistration(direct);
+        else {
+          // SessionEnd removed the label; do not show the ended session.
+          this.registered = false; this.pendingRegistration = null;
+          this.selected = null; this.messages = []; this.total = 0;
+          this.matchMethod = null; this.sessions = [];
+        }
+      } catch (e) {
+        if (seq === this.seq && readSeq === this.readSeq) this.error = String(e?.message ?? e);
+      } finally {
+        if (seq === this.seq && readSeq === this.readSeq) { this.reading = false; cx.notify(); }
+      }
     });
   }
   sessionPicker(t) {
@@ -194,9 +237,8 @@ export default class JecChat extends View {
       })));
   }
   resetChoice(cx) {
-    this.selected = null; this.messages = []; this.readSeq++;
-    this.reading = false; this.error = null; this.matchMethod = null;
-    cx.notify();
+    this.readSeq++; this.reading = false;
+    this.scan(cx, true); cx.notify();
   }
   render(cx) {
     const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
@@ -221,10 +263,16 @@ export default class JecChat extends View {
             this.manual = true; this.scan(cx); cx.notify();
           }))))
       .when(canRead && this.loading, el => el.child(div().p(16).text_color(t.muted).child("Buscando sesiones de Codex…")))
-      .when(canRead && !this.loading && !this.selected && this.sessions.length > 0, el => el.child(this.sessionPicker(t)))
-      .when(canRead && !this.loading && !this.selected && this.sessions.length === 0, el =>
+      .when(canRead && !this.loading && !this.selected && !this.pendingRegistration && this.sessions.length > 0, el => el.child(this.sessionPicker(t)))
+      .when(canRead && !this.loading && Boolean(this.pendingRegistration), el => el.child(v_flex().p(16).gap(10)
+        .child(div().text_color(t.muted).child("Sesión registrada: " + this.pendingRegistration.slice(0, 12)))
+        .child(div().text_color(t.dim).child("Esperando un historial legible de Codex. Se actualizará automáticamente."))
+        .child(h_flex().gap(8)
+          .child(button(t, "jec-pending-retry", "Actualizar", cx => this.refresh(cx), false, this.embedded))
+          .child(button(t, "jec-pending-pick", "Buscar manualmente", cx => this.resetChoice(cx), false, this.embedded)))))
+      .when(canRead && !this.loading && !this.selected && !this.pendingRegistration && this.sessions.length === 0, el =>
         el.child(div().p(18).text_color(t.muted).child(
-          "No se encontraron sesiones de Codex en esta carpeta. Iniciá Codex en la terminal y volvé a actualizar.")))
+          "No se encontró una sesión activa de Codex. Iniciá Codex en la terminal o volvé a abrir Chat.")))
       .when(canRead && Boolean(this.selected), el =>
         el.child(v_flex().flex_1().min_h(0)
           .child(h_flex().h(this.embedded ? 29 : 35).px(this.embedded ? 12 : 16)
