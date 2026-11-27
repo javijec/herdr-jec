@@ -2,7 +2,7 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.6 (chat interactivo con Codex)
+## jec-chat v0.7 (chat interactivo con Codex)
 
 En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. **La vista Chat conserva el marco, el icono, la ruta y el encabezado de 30 px de Herdr**; los botones de sesión y actualización quedan dentro de una fila secundaria compacta. La ventana anterior del chat aún puede abrirse desde la paleta.
 
@@ -10,9 +10,9 @@ En el layout personal `jec-chat`, las terminales locales de Codex muestran un bo
 - Lee `~/.codex/sessions/**/rollout-*.jsonl` o `$CODEX_HOME/sessions`.
 - Con los hooks autorizados, Codex registra directamente el UUID y la ruta del JSONL en la etiqueta `jec.chat.codex` de su terminal Herdr. Chat abre ese archivo sin recorrer sesiones ni comparar texto.
 - Para sesiones antiguas o sin hooks activos, se conserva el detector anterior (respuesta visible o UUID explícito) y el selector manual.
-- Refresca la conversacion cada 4 segundos mientras esta abierta.
+- Actualización adaptativa: alrededor de 1 s durante actividad y 2–3 s en reposo, sólo con Chat visible; no fuerza el scroll cuando no cambió el historial.
 - Composer nativo de varias líneas, con borradores en memoria separados por terminal y UUID. **Enviar** usa `hc send --if idle` cuando el agente está idle y `hc send` sin `--force` cuando está done; requiere registro directo y no inicia otro Codex.
-- Los prompts enviados y respuestas aparecen cuando Codex escribe el JSONL. El botón Enviar no está disponible mientras trabaja o espera permisos.
+- Los prompts enviados y respuestas aparecen cuando Codex escribe el JSONL. El botón Enviar no está disponible mientras trabaja o espera permisos. Detener interrumpe el turno mediante `hc interrupt`, sin cerrar Codex. Si está bloqueado, Ver solicitud muestra la pantalla original y Resolver en Terminal vuelve a la TUI.
 - Por ahora solo local: máquinas remotas y aprobaciones interactivas quedan para siguientes versiones.
 
 ### Instalacion en Windows (PowerShell)
@@ -42,7 +42,7 @@ Si Codex no fue reconocido automáticamente, todavía podés abrir el chat desde
 
 ### Enviar mensajes desde Chat
 
-Con `registro Codex` visible y el agente en estado idle o done, escribí un mensaje y pulsá **Enviar**. Enter agrega una línea. No uses el composer para comandos slash, comandos del shell ni solicitudes de permisos: volvé a **Terminal** para eso. Si el envío falla, el texto se conserva y no se reintenta automáticamente; comprobá la TUI antes de reenviar. El envío exige una versión de Herdr Core con `hc send --if idle` (ver `hc send --help`).
+Con `registro Codex` visible y el agente en estado idle o done, escribí un mensaje y pulsá **Enviar**. Enter envía y Shift+Enter agrega una línea en las versiones de Herdr que exponen los modificadores del evento submit. El botón Enviar siempre queda como alternativa. No uses el composer para comandos slash, comandos del shell ni solicitudes de permisos: volvé a **Terminal** para eso. Si el envío falla, el texto se conserva y no se reintenta automáticamente; comprobá la TUI antes de reenviar. El envío exige una versión de Herdr Core con `hc send --if idle` (ver `hc send --help`).
 
 Al actualizar desde la v0.5 ya funcional no es necesario reautorizar hooks si el instalador no modifica sus comandos.
 
@@ -56,6 +56,6 @@ herdr-app check ~/.config/herdr-app/mods/jec-chat
 
 En Windows: `herdr-app check "$HOME\.config\herdr-app\mods\jec-chat"`.
 
-**Estado:** alternancia y registro directo verificados por el usuario en Windows con Codex 0.172.0. El envío de v0.6 tiene pruebas unitarias; falta comprobar la GUI y un envío real en Herdr. Consultar [RECIPE](mods/jec-chat/RECIPE.md) para alcance y decisiones.
+**Estado:** alternancia y registro directo verificados por el usuario en Windows con Codex 0.172.0. El envío de v0.6 fue validado por el usuario en Windows. La v0.7 añade pruebas unitarias de interrupción y lectura del diálogo; resta validar los atajos y las acciones en la GUI real. Consultar [RECIPE](mods/jec-chat/RECIPE.md) para alcance y decisiones.
 
 Licencia: MIT.
