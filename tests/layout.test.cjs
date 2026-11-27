@@ -42,3 +42,15 @@ test("mods JEC no se acoplan al nombre de la terminal ni anulan el layout base",
   assert.match(chat, /stack: "jec-view", child: "main"/);
   assert.match(chat, /candidate\.terminal === wanted\.terminal/);
 });
+
+test("Chat embebido replica el marco y el encabezado compacto del pane original", () => {
+  const chat = read("mods/jec-chat/main.js");
+  const pane = read("mods/jec-pane/main.js");
+  assert.match(chat, /this\.embedded \? 30 : 53/);
+  assert.match(chat, /rounded\(10\)\.overflow_hidden\(\)\.border_1\(\)\.border_color\(t\.border\)/);
+  assert.match(chat, /program\.tint \? svg\(program\.icon\)/);
+  assert.match(chat, /this\.embedded \? "Terminal" : "← Terminal"/);
+  assert.match(chat, /jec-choose-inline/);
+  assert.match(chat, /jec-refresh-inline/);
+  assert.match(pane, /this\.chatButton\(t, p\)/);
+});
