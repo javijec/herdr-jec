@@ -2,7 +2,7 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.8 (arquitectura de proveedores multiagente)
+## jec-chat v0.9 (integración de OpenCode v2)
 
 En el layout personal `jec-chat`, las terminales locales de Codex muestran un botón **Chat** en el encabezado. Cambia entre la conversación nativa y **Terminal** en el mismo espacio central, sin cerrar, reiniciar ni reemplazar el agente. El layout `main` y los mods de fábrica permanecen intactos. **La vista Chat conserva el marco, el icono, la ruta y el encabezado de 30 px de Herdr**; los botones de sesión y actualización quedan dentro de una fila secundaria compacta. La ventana anterior del chat aún puede abrirse desde la paleta.
 
@@ -22,11 +22,23 @@ La vista compartida usa el contrato de `mods/jec-chat/providers/index.js` para i
 | Agente | Estado de v0.8 |
 | --- | --- |
 | Codex local | Proveedor activo, conserva el comportamiento validado de v0.7 |
-| OpenCode | Detectado, adaptador de sesión todavía pendiente |
+| OpenCode 2.x | Proveedor local experimental, registro de la TUI activa e interacción vía hc |
 | Pi / Gentle Shell | Detectado, adaptador de sesión todavía pendiente |
 | Máquinas remotas | Identidad y capacidades contempladas, lectura/envío deshabilitados |
 
-No se instalaron hooks adicionales ni se habilitan acciones sobre agentes sin un proveedor verificado. El punto de recuperación de la versión validada es la rama `stable/v0.7`.
+El instalador incorpora un plugin local de OpenCode v2, sin modificar sus archivos de configuración ni los hooks de Codex. No se habilitan acciones sobre agentes sin una sesión registrada. El punto de recuperación de la versión validada es la rama `stable/v0.7`.
+
+### OpenCode v2 (local)
+
+1. Instalá el mod con el mismo `install.ps1` (o `-SkipOpenCodePlugin` para omitir el plugin de OpenCode).
+2. Cerrá y volvé a abrir OpenCode **desde Herdr** para que herede `HC_TERMINAL_ID`. El plugin se instala en `~/.config/opencode/plugins/jec-chat-opencode/tui.ts` (o el directorio de configuración personalizado).
+3. Si OpenCode solicita autorización, revisá `/plugins` y habilitá únicamente `jec-chat-opencode`. Necesita un OpenCode v2 con la API de TUI plugins y su host TypeScript/Bun habilitado.
+4. Abrí una conversación principal (en la pantalla de inicio o en una vista de subagente no se registra una conversación). Luego pulsá Chat en Herdr. Debe mostrar `registro OpenCode`.
+5. Para enviar mensajes, el core de Herdr debe reportar `idle` o `done` y la API de OpenCode debe reportar que esa sesión está idle. Si no aparece ese estado, revisá el indicador de agente de Herdr; no se fuerza el envío.
+
+El plugin publica únicamente la sesión visible en la TUI, con un snapshot local acotado a las últimas 80 filas en `~/.config/herdr-app/data/jec-chat-opencode/<terminal>.json`. Contiene texto visible, ID y estado; excluye razonamiento, inputs/outputs de herramientas, adjuntos y metadatos. Se reemplaza aproximadamente cada segundo, se elimina al desactivar el plugin en forma normal y deja de ser válido después de 6,5 s sin actualizaciones. Un cierre abrupto puede dejar el archivo vencido en disco; se puede eliminar manualmente. No se expone un puerto, no se abre otro agente ni se lee una base de datos por fecha.
+
+**Validación:** pruebas unitarias de la API simulada y del proveedor, pendiente comprobar el plugin en OpenCode/Herdr reales en Windows. No se promete compatibilidad con OpenCode 1.x ni con remotos en esta versión.
 
 ### Instalacion en Windows (PowerShell)
 
