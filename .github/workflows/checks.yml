@@ -23,6 +23,9 @@ jobs:
         run: |
           node --check mods/jec-chat/main.js
           node --check mods/jec-chat/session.js
+          node --check mods/jec-chat/provider-catalog.js
+          node --check mods/jec-chat/providers/index.js
+          node --check mods/jec-pane/provider-catalog.js
           node --check mods/jec-chat/providers/codex.js
           node --check mods/jec-chat/providers/match.js
           node --check mods/jec-pane/main.js
