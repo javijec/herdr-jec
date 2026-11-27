@@ -1,4 +1,4 @@
-# Deactivate only JEC Chat; preserve stock mods, sessions and unrelated agent integrations.
+# Retire legacy JEC mods; preserve stock mods, sessions and unrelated integrations.
 param([string[]]$PiAgentHome)
 $ErrorActionPreference = 'Stop'
 $appHome = if ($env:HERDR_APP_HOME) { $env:HERDR_APP_HOME } else { Join-Path $HOME '.config/herdr-app' }
@@ -29,7 +29,7 @@ $scripts = @($appHomes | ForEach-Object { Join-Path $_ 'mods/jec-chat/providers/
 & node (Join-Path $PSScriptRoot 'scripts/disable-chat-hooks.cjs') @scripts
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron desactivar los hooks JEC; no se movieron los mods.' }
 foreach ($root in $appHomes) {
-  foreach ($name in @('jec-chat','jec-pane','jec-chat-native')) { Backup-Jec (Join-Path $root "mods/$name") $name }
+  foreach ($name in @('jec-chat','jec-pane','jec-chat-native','jec-machines')) { Backup-Jec (Join-Path $root "mods/$name") $name }
   foreach ($name in @('jec-chat.json','jec-chat-native.json')) { Backup-Jec (Join-Path $root "layouts/$name") $name }
 }
 $ocConfig = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } elseif ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME 'opencode' } else { Join-Path $HOME '.config/opencode' }
@@ -39,5 +39,5 @@ $homes += $(if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Jo
 $homes += $(if ($env:GENTLE_PI_AGENT_HOME) { $env:GENTLE_PI_AGENT_HOME } elseif ($env:GENTLE_SHELL_HOME) { $env:GENTLE_SHELL_HOME } else { Join-Path $HOME '.gentle-shell/agent' })
 $homes += $env:GENTLE_SHELL_USER_PI_HOME
 foreach ($agentHome in ($homes | Where-Object { $_ } | Select-Object -Unique)) { Backup-Jec (Join-Path $agentHome 'extensions/jec-chat.ts') 'pi-chat' }
-Write-Host 'JEC Chat desactivado. No se cerraron terminales ni se borraron sesiones.'
+Write-Host 'Mods JEC anteriores retirados. Herdr usa su layout oficial main. No se cerraron terminales ni se borraron sesiones.'
 Write-Host 'Reinicia o recarga los agentes cuando terminen sus tareas; los plugins ya cargados pueden seguir en memoria hasta entonces.'

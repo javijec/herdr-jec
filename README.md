@@ -1,20 +1,30 @@
 # herdr-jec
 
-Mods sobre Herdr Desktop oficial, sin modificar ni compilar el ejecutable.
+Punto de partida limpio para extender Herdr Desktop oficial. No hay mods JEC activos ni layouts propios en main.
 
-**Base oficial:** [upstream/herdr-app](upstream/herdr-app) es una referencia Git fijada con todos los mods originales, layouts, recursos y API. Consultar [inventario y política de reutilización](upstream/README.md). El instalador no copia ni compila esta referencia; se reutiliza el código oficial antes de crear cualquier mod nuevo.
+## Base oficial
 
-## JEC Machines v0.1 (experimental)
+[upstream/herdr-app](upstream/herdr-app) es un submódulo fijado que contiene los 21 mods de fábrica, layouts, iconos, recursos y API. Consultar el [inventario y política de reutilización](upstream/README.md).
 
-Primer paso: una vista nativa de equipos locales/remotos, disponibilidad del layout, espacios, cantidad de pestañas y estados de agentes. Usa las APIs oficiales machines(), spaces(), agents() y space.select. Se abre desde la paleta, sin modificar el sidebar ni el layout. No mide CPU/RAM, no prueba conectividad por SSH, no instala agentes. La disponibilidad es la del layout según Herdr.
+```powershell
+git submodule update --init --depth 1 upstream/herdr-app
+```
+
+Es opcional para usar Herdr. No compilar ni instalar la referencia.
+
+## Retirar los mods anteriores (Windows)
+
+Con Herdr abierto, ejecutar:
 
 ```powershell
 git pull
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-El instalador desactiva JEC Chat antes de instalar Machines. Abre Ctrl+Shift+P y busca JEC Machines. Para solo desactivar Chat, ejecuta disable-chat.ps1. El desactivador vuelve a main, respalda los archivos de los mods/layouts, retira los hooks específicos de Codex y respalda las integraciones específicas de OpenCode y Pi/Gentle Shell. No mata agentes ni borra sesiones; recarga/reinicia los agentes al terminar el trabajo actual. Usa -PiAgentHome para homes personalizados. Datos históricos/snapshots no se eliminan.
+El script vuelve al layout main y respalda exclusivamente los antiguos mods/layouts JEC, entre ellos Chat y Machines. Retira sólo las integraciones específicas de Chat. No instala mods nuevos ni sobrescribe los oficiales. No elimina sesiones. Recargar los agentes al finalizar sus tareas si aún tienen integraciones antiguas en memoria.
 
-## JEC Chat (archivado)
+El trabajo anterior se conserva en el [historial de Git](https://github.com/javijec/herdr-jec/tree/c31328e86e8a34c3268bbd2a990974e7d665a647); no forma parte del árbol activo. La rama experimental nativa sigue separada. No hay workflows automáticos de compilación.
 
-Desarrollo suspendido. Código conservado en el repositorio; no se instala por defecto. [Documentación histórica](archive/CHAT.md). La rama experimental nativa se mantiene separada.
+## Desarrollo
+
+Partir de los mods oficiales; modificar únicamente lo necesario y conservar la licencia de origen. Evitar recrear componentes, layouts y funcionalidades existentes. No modificar ni recompilar Herdr.

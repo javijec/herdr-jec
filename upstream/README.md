@@ -43,8 +43,3 @@ Do not initialize nested submodules; the defaults do not require them. No build,
 3. Never copy the stock mods into the user's active configuration automatically or modify the executable.
 4. Before upgrading the reference, compare upstream changes and retest only the affected JEC mods. The gitlink is pinned, not automatically advanced.
 
-## Historical snapshot
-
-# Upstream pane baseline
-
-Unmodified official pane source: https://github.com/herdrdev/herdr-app/blob/1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa/defaults/mods/pane/main.js (Apache-2.0; license in mods/jec-chat/LICENSE.herdr). JEC derives its header from this version and adds the Chat button and view restoration. No upstream executable patch, runtime import from other mods, or automatic updating of this baseline.
