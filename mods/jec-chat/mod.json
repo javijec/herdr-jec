@@ -1,6 +1,6 @@
 {
   "place": "none",
-  "title": "JEC Chat",
+  "title": "JEC Chat Native (experimental)",
   "focusable": true,
   "overlay": {
     "kind": "dialog",
@@ -9,10 +9,10 @@
   },
   "palette": [
     {
-      "title": "JEC Chat: ver conversación del agente",
+      "title": "JEC Chat Native: ver conversación del agente",
       "command": "mod.open",
       "args": {
-        "name": "jec-chat"
+        "name": "jec-chat-native"
       },
       "words": "chat codex opencode pi gentle-shell transcript sesion historial"
     }

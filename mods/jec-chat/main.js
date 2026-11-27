@@ -1,10 +1,10 @@
-import { View, div, svg, image } from "gpui-kit";
+import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle, TextareaState, Textarea } from "gpui-base";
-import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, setShared, run, layout, window as appWindow } from "herdr";
+import { focused, panes, spaces, terminals, props, theme, closeOverlay, run, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
 import { providerFor, providerName, sessionKey, sameActiveSession, allowsAction } from "./providers/index.js";
-import { supportsChat } from "./provider-catalog.js";
-import { VIEW_KEY, activeTab, wantedPane, forgetChat, activeView } from "./view-state.js";
+import { resolvePaneBody, paneBodyVisible, samePaneTarget, NATIVE_MOD } from "./native-pane.js";
+import { PaneHeader } from "./pane-header.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -14,32 +14,22 @@ function button(t, id, label, onClick, active = false, compact = false) {
     .on_click((_e, cx) => { cx.stop_propagation(); onClick(cx); }).child(label);
 }
 
-// Resolve only the remembered pane of the CURRENT tab/space. A different
-// tab may have its own Chat preference, or may remain in Terminal.
-function embeddedTarget() {
-  const allSpaces = spaces(), allPanes = panes();
-  const active = activeTab(allSpaces);
-  const wanted = wantedPane(shared(VIEW_KEY), active, allPanes);
-  if (!wanted) return null;
-  const candidate = resolveTarget({
-    focus: { pane: wanted.pane, terminal: wanted.terminal, space: active.space },
-    allPanes, allSpaces, allTerminals: terminals(),
-  });
-  return supportsChat(candidate) && candidate.terminal === wanted.terminal
-    ? { ...candidate, tab: wanted.tab, space: active.space } : null;
-}
 const emptyTarget = () => ({ terminal: null, pane: null, cwd: null, machine: null, providerId: null });
 
 export default class JecChat extends View {
   init(_props, cx) {
-    this.embedded = props()?.embedded === true;
-    this.target = this.embedded ? (embeddedTarget() ?? emptyTarget()) : resolveTarget({
+    const p=props() ?? {};
+    this.headerRole = p.paneHeader === true;
+    if (this.headerRole) { this.paneHeader = new PaneHeader(); return; }
+    this.embedded = p.paneBody === true;
+    this.identity = this.embedded ? {pane:p.pane,terminal:p.terminal} : null;
+    this.target = this.embedded ? (this.liveTarget() ?? emptyTarget()) : resolveTarget({
       focus: focused(), allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
     });
     this.provider = providerFor(this.target);
     this.sessions = []; this.selected = null; this.messages = []; this.total = 0;
     this.loading = false; this.reading = false; this.error = null;
-    this.matchMethod = null; this.previousView = this.embedded ? activeView(layout()) : null;
+    this.matchMethod = null; this.wasVisible = this.isVisible();
     this.manual = false; this.stale = false; this.more = false;
     this.registered = false; this.pendingRegistration = null;
     this.coreStatus = null;
@@ -76,60 +66,63 @@ export default class JecChat extends View {
       if (this.composer.value().trim()) this.send(cx);
     });
     this.closed = false; this.seq = 0; this.readSeq = 0;
-    if (this.provider) this.scan(cx);
+    if (this.provider && this.wasVisible) this.scan(cx);
     if (this.embedded) cx.timer.every(400, cx => this.syncTarget(cx));
     cx.timer.every(1000, (cx) => {
       if (this.closed || (!this.selected && !this.pendingRegistration) || this.reading || this.loading || appWindow()?.visible === false
-          || (this.embedded && activeView(layout()) !== "jec-chat-view")) return;
+          || !this.isVisible()) return;
       const state = this.agentState();
       const busy = this.sending || (this.waitingFor && !this.waitingFor.expired) || this.interrupting || state === "working" || state === "blocked";
       const interval = busy ? 1000 : 2500;
       if (Date.now() - this.lastPoll >= interval) { this.lastPoll = Date.now(); this.refresh(cx); }
     });
   }
-  close() { this.closed = true; this.seq++; this.readSeq++; this.composer.release(); }
+  liveTarget() {
+    return resolvePaneBody(this.identity,panes(),spaces(),terminals());
+  }
+  isVisible() {
+    return !this.embedded || paneBodyVisible(this.identity,panes(),spaces());
+  }
+  close() {
+    if (this.headerRole) return;
+    this.closed=true; this.seq++; this.readSeq++; this.composer.release();
+  }
   back() {
     this.composer.blur();
     if (this.embedded) {
-      // An explicit Terminal click changes ONLY this tab's preference.
-      setShared(VIEW_KEY, forgetChat(shared(VIEW_KEY), activeTab(spaces())));
-      run("layout.select", { stack: "jec-view", child: "main" });
+      const live=panes().find(p=>p.pane===this.identity?.pane && p.terminal===this.identity?.terminal);
+      if (live?.body_mod===NATIVE_MOD) run("pane.view",{pane:live.pane});
     } else closeOverlay(props()?.overlay);
   }
   syncTarget(cx) {
     if (this.closed || !this.embedded) return;
-    const next = embeddedTarget();
-    const old = this.target;
-    const changed = (next?.terminal ?? null) !== old?.terminal || (next?.cwd ?? null) !== old?.cwd
-      || (next?.pane ?? null) !== old?.pane || (next?.providerId ?? null) !== old?.providerId
-      || (next?.machine ?? null) !== old?.machine
-      || (next?.tab ?? null) !== (old?.tab ?? null) || (next?.space ?? null) !== (old?.space ?? null);
-    if (changed) {
-      this.composer.blur(); this.bindDraft(null);
-      this.target = next ?? emptyTarget();
-      this.provider = providerFor(this.target);
-      this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
-      this.manual = false; this.error = null; this.loading = false; this.reading = false;
-      this.seq++; this.readSeq++; this.more = false; this.stale = false; this.matchMethod = null;
-      this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
-      if (this.provider) this.scan(cx);
+    const visible=this.isVisible();
+    const next=this.liveTarget();
+    const changed=next ? !samePaneTarget(next,this.target) : Boolean(this.target?.terminal);
+    const revealed=visible&&!this.wasVisible;
+    const hidden=!visible&&this.wasVisible;
+    this.wasVisible=visible;
+    if (changed || hidden || revealed) {
+      // Hidden instances retain their own drafts, but no reads or actions
+      // from the old registration may survive a hide or identity change.
+      this.seq++; this.readSeq++;
+      this.loading=false; this.reading=false; this.registered=false;
+      this.pendingRegistration=null; this.dialog=null; this.coreStatus=null;
+      this.waitingFor=null; this.sendNotice=null; this.sendError=null;
+      if (changed) {
+        this.composer.blur(); this.bindDraft(null);
+        this.target=next??emptyTarget(); this.provider=providerFor(this.target);
+        this.selected=null; this.sessions=[]; this.messages=[]; this.total=0;
+        this.manual=false; this.error=null; this.more=false; this.stale=false; this.matchMethod=null;
+      }
+      if (hidden) this.composer.blur();
+      if (visible && this.provider) this.scan(cx);
       cx.notify();
-    }
-    const view = activeView(layout());
-    // A Codex user can type /new or /resume while in Terminal. Every time
-    // Chat is reopened, re-identify the session rather than reuse a stale file.
-    if (!changed && next && view === "jec-chat-view" && this.previousView !== "jec-chat-view") this.scan(cx);
-    this.previousView = view;
-    // Automatic fallback must NOT forget the previous tab's preference.
-    // The visible pane header restores Chat when returning to a remembered tab.
-    if (!next && view === "jec-chat-view") {
-      this.composer.blur();
-      run("layout.select", { stack: "jec-view", child: "main" });
     }
   }
   scan(cx, forcePicker = false) {
     const target = this.target, provider = this.provider;
-    if (this.loading || !provider?.capabilities.history || !target.cwd || (target.machine && !provider.capabilities.remote)) return;
+    if (!this.isVisible() || this.loading || !provider?.capabilities.history || !target.cwd || (target.machine && !provider.capabilities.remote)) return;
     this.loading = true; this.error = null; this.selected = null;
     this.matchMethod = null; this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
     this.messages = []; this.total = 0; this.readSeq++; this.reading = false;
@@ -206,7 +199,7 @@ export default class JecChat extends View {
     this.refresh(cx);
   }
   refresh(cx) {
-    if ((!this.selected && !this.pendingRegistration) || this.reading || this.closed) return;
+    if (!this.isVisible() || (!this.selected && !this.pendingRegistration) || this.reading || this.closed) return;
     if (this.registered) { this.refreshRegistered(cx); return; }
     this.reading = true;
     const session = this.selected, target = this.target, provider = this.provider;
@@ -308,10 +301,7 @@ export default class JecChat extends View {
         || this.target?.terminal !== target.terminal || this.target?.providerId !== target.providerId
         || this.target?.machine !== target.machine) return false;
     if (!this.embedded) return true;
-    const live = embeddedTarget();
-    return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane
-      && live?.providerId === target.providerId && live?.machine === target.machine
-      && live?.tab === target.tab && live?.space === target.space;
+    return this.isVisible() && samePaneTarget(this.liveTarget(),target);
   }
   stop(cx) {
     if (this.closed || this.sending || this.interrupting || !allowsAction(this.target, this.provider, this.selected, this.registered, "interrupt")) return;
@@ -431,51 +421,32 @@ export default class JecChat extends View {
           : TextView.markdown("jec-message-" + i, m.text).raw_html(false).selectable(true).w_full()))
       .when(!mine, el => el.child(div().flex_1()));
   }
-  // Use the same 30 px pane header, name, icon, path and chrome as Herdr's
-  // terminal pane. The embedded chat is a view, not a new application shell.
-  header(t, target) {
-    const pane = this.embedded ? panes().find(p => p.pane === target.pane) : null;
-    const program = pane?.program;
-    const pic = program?.icon
-      ? (program.tint ? svg(program.icon).size(14).flex_none().text_color(t.dim)
-        : image(program.icon).w(14).h(14).flex_none()) : null;
-    const name = this.embedded
-      ? pane?.name || ((program?.agent || program?.shell) && program.name) || pane?.title || program?.name || providerName(target, this.provider)
-      : "JEC Chat";
-    const cwd = this.embedded ? (target.cwd || "")
-      : [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ");
-    return h_flex().h(this.embedded ? 30 : 53).flex_none()
-      .px(this.embedded ? 10 : 16).gap(8).items_center()
+  // Only the standalone palette dialog needs its own header; the native
+  // pane frame already renders the shared header, including split/zoom/close.
+  header(t,target) {
+    return h_flex().h(53).flex_none().px(16).gap(8).items_center()
       .bg(t.background).border_b(1).border_color(t.border)
-      .when(Boolean(pic), el => el.child(pic))
-      .child(div().flex_none().font_medium().text_size(this.embedded ? 12 : 15)
-        .max_w(this.embedded ? 170 : 240).truncate().child(name))
-      .child(div().flex_1().min_w(0).truncate().text_color(t.dim)
-        .text_size(this.embedded ? 12 : 11).child(cwd))
-      .child(button(t, "jec-terminal", this.embedded ? "Terminal" : "← Terminal", () => this.back(), false, this.embedded))
-      .when(!this.embedded && Boolean(this.selected) && Boolean(this.provider?.capabilities.discovery), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => this.resetChoice(cx))))
-      .when(!this.embedded, el => el.child(button(t, "jec-refresh", "Actualizar", cx => {
-        if (this.selected) this.refresh(cx);
-        else this.scan(cx);
-      })));
+      .child(div().font_medium().text_size(15).child("JEC Chat"))
+      .child(div().flex_1().min_w(0).truncate().text_color(t.dim).text_size(11)
+        .child([target.terminal,target.cwd].filter(Boolean).join(" · ")))
+      .child(button(t,"jec-terminal","← Terminal",()=>this.back()))
+      .when(Boolean(this.selected)&&Boolean(this.provider?.capabilities.discovery),el=>el.child(button(t,"jec-choose","Cambiar sesión",cx=>this.resetChoice(cx))))
+      .child(button(t,"jec-refresh","Actualizar",cx=>{if(this.selected)this.refresh(cx);else this.scan(cx);}));
   }
   resetChoice(cx) {
     this.readSeq++; this.reading = false;
     this.scan(cx, true); cx.notify();
   }
   render(cx) {
-    const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
-    const target = this.embedded && (valid?.terminal !== this.target?.terminal
-      || valid?.pane !== this.target?.pane || valid?.tab !== this.target?.tab
-      || valid?.space !== this.target?.space || valid?.providerId !== this.target?.providerId
-      || valid?.machine !== this.target?.machine) ? emptyTarget() : this.target;
+    if (this.headerRole) return this.paneHeader.render(cx);
+    const t=theme(), valid=this.embedded?this.liveTarget():this.target;
+    const target=this.embedded && (!this.isVisible() || !samePaneTarget(valid,this.target)) ? emptyTarget() : this.target;
     const canScan = Boolean(target.terminal && target.cwd);
     const canRead = canScan && Boolean(this.provider?.capabilities.history) && (!target.machine || this.provider.capabilities.remote);
     const name = providerName(target, this.provider);
     return v_flex().id("jec-chat-root").w_full().h_full().min_h(0)
       .bg(t.background).text_color(t.foreground).text_size(13)
-      .when(this.embedded, el => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
-      .child(this.header(t, target))
+      .when(!this.embedded, el => el.child(this.header(t,target)))
       .when(Boolean(target.terminal && this.error), el => el.child(div().p(12).bg(t.raised).text_color(t.blocked)
         .text_size(12).child(this.error)))
       .when(Boolean(target.machine) && !canRead, el => el.child(div().p(18).text_color(t.muted)

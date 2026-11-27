@@ -1,89 +1,59 @@
 "use strict";
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-
-const root = path.resolve(__dirname, "..");
-const read = name => fs.readFileSync(path.join(root, name), "utf8");
-function find(node, id) {
-  if (node?.id === id) return node;
-  for (const child of node?.children ?? []) {
-    const result = find(child, id);
-    if (result) return result;
-  }
-  return null;
+const test=require("node:test"), assert=require("node:assert/strict"), fs=require("node:fs"), path=require("node:path");
+const read=p=>fs.readFileSync(path.join(__dirname,"..",p),"utf8");
+const url=s=>"data:text/javascript;charset=utf-8,"+encodeURIComponent(s);
+async function helpers(){
+  const cat=url(read("mods/jec-chat/provider-catalog.js"));
+  const session=url(read("mods/jec-chat/session.js").replace('"./provider-catalog.js"',JSON.stringify(cat)));
+  return import(url(read("mods/jec-chat/native-pane.js").replace('"./session.js"',JSON.stringify(session)).replace('"./provider-catalog.js"',JSON.stringify(cat))));
 }
-test("layout JEC conserva el Herdr original y cambia solo la vista central", () => {
-  const data = JSON.parse(read("layouts/jec-chat.json"));
-  assert.equal(find(data, "tabs").content.mod, "tabs");
-  assert.equal(find(data, "agents").content.mod, "agents");
-  assert.equal(find(data, "spaces").content.mod, "spaces");
-  assert.equal(find(data, "panel-body").active, "files");
-  const stage = find(data, "jec-view");
-  assert.equal(stage.type, "stack");
-  assert.equal(stage.active, "main");
-  assert.equal(stage.children.length, 2);
-  assert.equal(find(data, "main").content.tab, "active");
-  assert.equal(find(data, "main").content.pane.header.content.mod, "jec-pane");
-  assert.equal(find(data, "jec-chat-view").content.mod, "jec-chat");
-  assert.equal(find(data, "jec-chat-view").content.props.embedded, true);
+function find(n,id){return n.id===id?n:(n.children??[]).map(c=>find(c,id)).find(Boolean);}
+test("native layout retains original tabs, spaces and split tree without a global Chat stack",()=>{
+ const l=JSON.parse(read("layouts/jec-chat-native.json"));
+ for(const id of ["tabs","agents","spaces"]) assert.equal(find(l,id).content.mod,id);
+ assert.equal(find(l,"panel-body").active,"files");
+ assert.equal(find(l,"jec-view"),undefined); assert.equal(find(l,"jec-chat-view"),undefined);
+ assert.deepEqual(find(l,"main").content.pane.header.content,{mod:"jec-chat-native",props:{paneHeader:true}});
+ assert.equal(find(l,"main").content.tab,"active");
+ const m=JSON.parse(read("mods/jec-chat/mod.json"));
+ assert.equal(m.palette[0].args.name,"jec-chat-native");
 });
-test("mods JEC no se acoplan al nombre de la terminal ni anulan el layout base", () => {
-  for (const name of ["jec-chat", "jec-pane"]) {
-    const mod = JSON.parse(read(`mods/${name}/mod.json`));
-    assert.equal(mod.place, "none");
-  }
-  const pane = read("mods/jec-pane/main.js");
-  assert.match(pane, /setShared\(VIEW_KEY, rememberChat/);
-  assert.match(pane, /chatAvailable\(p\)/);
-  assert.match(pane, /stack: "jec-view", child: "jec-chat-view"/);
-  const chat = read("mods/jec-chat/main.js");
-  assert.match(chat, /stack: "jec-view", child: "main"/);
-  assert.match(chat, /candidate\.terminal === wanted\.terminal/);
+test("two splits use exact per-pane identity, not focused terminal or cwd",async()=>{
+ const {resolvePaneBody,paneBodyVisible,samePaneTarget,NATIVE_MOD,toggleArgs}=await helpers();
+ const p1={pane:"p1",terminal:"t1",tab:"b1",cwd:"/same",program:{key:"codex"},body_mod:NATIVE_MOD,focused:true};
+ const p2={pane:"p2",terminal:"t2",tab:"b1",cwd:"/same",program:{key:"opencode"},body_mod:NATIVE_MOD};
+ const p3={pane:"p3",terminal:"t3",tab:"b2",cwd:"/same",program:{key:"pi"},body_mod:NATIVE_MOD};
+ const panes=[p1,p2,p3];
+ const spaces=[{id:"s1",active:true,tabs:[{id:"b1",active:true},{id:"b2",active:false}]}];
+ const a=resolvePaneBody(p1,panes,spaces,[]), b=resolvePaneBody(p2,panes,spaces,[]);
+ assert.equal(a.terminal,"t1");assert.equal(b.terminal,"t2");assert.equal(b.providerId,"opencode");
+ assert.equal(samePaneTarget(a,b),false);
+ assert.equal(paneBodyVisible(p1,panes,spaces),true);assert.equal(paneBodyVisible(p2,panes,spaces),true);
+ assert.equal(paneBodyVisible(p3,panes,spaces),false);
+ p1.zoomed=true;assert.equal(paneBodyVisible(p2,panes,spaces),false);p1.zoomed=false;
+ p1.body_mod=null;assert.equal(paneBodyVisible(p1,panes,spaces),false);assert.equal(paneBodyVisible(p2,panes,spaces),true);
+ assert.deepEqual(toggleArgs(p1),{pane:"p1",mod:NATIVE_MOD});assert.deepEqual(toggleArgs(p2),{pane:"p2"});
+ assert.equal(toggleArgs({pane:"p1",terminal:"t1"}),null);
+ assert.equal(toggleArgs({...p1,body_mod:"another-mod"}),null);
+ spaces[0].tabs[0].active=false;spaces[0].tabs[1].active=true;
+ assert.equal(paneBodyVisible(p2,panes,spaces),false);assert.equal(paneBodyVisible(p3,panes,spaces),true);
+ assert.equal(resolvePaneBody({...p2,terminal:"replacement"},panes,spaces,[]),null);
+ assert.equal(resolvePaneBody(p2,panes,[{...spaces[0],machine:"remote"}],[]),null);
 });
-
-test("Chat embebido replica el marco y el encabezado compacto del pane original", () => {
-  const chat = read("mods/jec-chat/main.js");
-  const pane = read("mods/jec-pane/main.js");
-  assert.match(chat, /this\.embedded \? 30 : 53/);
-  assert.match(chat, /rounded\(10\)\.overflow_hidden\(\)\.border_1\(\)\.border_color\(t\.border\)/);
-  assert.match(chat, /program\.tint \? svg\(program\.icon\)/);
-  assert.match(chat, /this\.embedded \? "Terminal" : "← Terminal"/);
-  assert.match(chat, /jec-choose-inline/);
-  assert.match(chat, /jec-refresh-inline/);
-  assert.match(pane, /this\.chatButton\(t, p\)/);
+test("one mod owns header/body roles and native pane commands, no stack switching",()=>{
+ const chat=read("mods/jec-chat/main.js"), header=read("mods/jec-chat/pane-header.js");
+ assert.match(chat,/this\.headerRole = p\.paneHeader === true/);
+ assert.match(chat,/this\.embedded = p\.paneBody === true/);
+ assert.match(chat,/if \(this\.headerRole\) return this\.paneHeader\.render\(cx\)/);
+ assert.match(chat,/\.when\(!this\.embedded, el => el\.child\(this\.header\(t,target\)\)\)/);
+ assert.match(chat,/run\("pane\.view",\{pane:live\.pane\}\)/);
+ assert.match(header,/run\("pane\.view",args\)/);
+ assert.doesNotMatch(chat+header,/layout\.select|setShared|restoreChat/);
+ assert.match(chat,/this\.isVisible\(\) && samePaneTarget\(this\.liveTarget\(\),target\)/);
 });
-
-test("Chat view preferences are independent per tab and space", async () => {
-  const source = read("mods/jec-chat/view-state.js");
-  assert.equal(source,read("mods/jec-pane/view-state.js"));
-  const {activeTab,rememberChat,forgetChat,wantedPane,activeView} =
-    await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
-  const a={space:"s1",tab:"b1"}, b={space:"s1",tab:"b2"}, c={space:"s2",tab:"b3"};
-  const p1={pane:"p1",terminal:"t1",tab:"b1"}, p2={pane:"p2",terminal:"t2",tab:"b2"}, p3={pane:"p3",terminal:"t3",tab:"b3"};
-  const panes=[p1,p2,p3];
-  let saved=rememberChat(null,a,p1);
-  assert.equal(wantedPane(saved,a,panes),p1);
-  assert.equal(wantedPane(saved,b,panes),null);
-  saved=rememberChat(saved,b,p2);
-  assert.equal(wantedPane(saved,b,panes),p2);
-  assert.equal(wantedPane(saved,a,panes),p1);
-  saved=forgetChat(saved,b);
-  assert.equal(wantedPane(saved,b,panes),null);
-  assert.equal(wantedPane(saved,a,panes),p1);
-  saved=rememberChat(saved,c,p3);
-  assert.equal(wantedPane(saved,c,panes),p3);
-  assert.equal(wantedPane(saved,a,[{...p1,terminal:"replacement"}]),null);
-  assert.equal(wantedPane(saved,{...a,space:"other"},panes),null);
-  assert.equal(rememberChat(saved,b,p1),saved);
-  assert.deepEqual(activeTab([{id:"s1",active:false,tabs:[{id:"b1",active:true}]},{id:"s2",active:true,tabs:[{id:"b3",active:true}]}]),c);
-  assert.equal(activeView({id:"root",children:[{id:"jec-view",active:"main"}]}),"main");
-});
-test("explicit Terminal forgets only active tab; automatic fallback does not forget",()=>{
-  const chat=read("mods/jec-chat/main.js"), pane=read("mods/jec-pane/main.js");
-  assert.match(chat,/back\(\) \{[\s\S]*?forgetChat\(shared\(VIEW_KEY\), activeTab\(spaces\(\)\)\)/);
-  assert.doesNotMatch(chat,/if \(!next && view === "jec-chat-view"\) this\.back\(\)/);
-  assert.match(pane,/cx\.timer\.every\(250, \(\) => this\.restoreChat\(\)\)/);
-  assert.match(pane,/p\.terminal !== wanted\.terminal/);
+test("installer is opt-in and leaves stable mod names untouched",()=>{
+ const s=read("install.ps1");
+ assert.match(s,/pane\\\.view/);assert.match(s,/mods\/jec-chat-native/);
+ assert.match(s,/layouts\/jec-chat-native\.json/);
+ assert.doesNotMatch(s,/install-hooks|SkipCodexHooks/);
 });

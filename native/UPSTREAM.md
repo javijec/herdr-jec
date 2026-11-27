@@ -15,4 +15,12 @@ cargo check --locked
 
 The command is `pane.view {pane, mod?}`; omitting mod restores the terminal. A window-local override is scoped to the layout, pane and original terminal address. It never changes the model or calls terminal.park/kill. The body mod receives `{pane, terminal, paneBody:true}`. The header sees `panes()[i].body_mod`. A hidden body copy is retained so it can preserve its local state when toggled. Closing/replacing a terminal removes the override. No persisted overrides, no remote model changes, no upstream PR. Focus, keyboard routing, hidden terminal sizing, mod lifecycle and splits require native runtime validation.
 
-This first phase intentionally keeps the existing JEC mods and installer unchanged. The companion layout and per-pane JS refactor are the next phase, after cargo check and runtime validation. Do not install this branch expecting the old mod to use pane.view yet.
+## Companion mod (v0.12.1)
+
+This branch now contains the unified JEC mod source at `mods/jec-chat`, installed under the separate name `jec-chat-native`. The new layout is `jec-chat-native`. The same mod renders the native header (props.paneHeader) and chat body (props.paneBody); the original global stack is not used. Stable JEC files and hooks stay installed separately. Run the experimental installer only after compiling the patched binary and checking it. Native compilation and GUI integration have not yet been verified.
+
+```powershell
+# From the JEC feature branch, after compiling Herdr with the patch:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -HerdrApp 'C:\path\to\herdr-app.exe'
+```
+Select the new layout from the patched application. Test two simultaneous split chats, terminal/chat toggle, tab/space switching, zoom, send, close, and native focus/keyboard routing. Roll back by selecting the stable layout in the original binary.
