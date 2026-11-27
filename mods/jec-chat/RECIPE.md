@@ -1,6 +1,30 @@
-# jec-chat v0.7 — alcance y contrato
+# jec-chat v0.8 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
+
+## Arquitectura de proveedores (v0.8)
+
+`provider-catalog.js` contiene los identificadores reconocidos, sus alias y las capacidades de local/remoto. Se mantiene una copia idéntica en ambos mods para evitar importar módulos fuera del directorio propio; CI comprueba que no diverjan. Los nombres editables de la terminal no determinan el agente.
+
+`session.js` resuelve `{terminal, pane, cwd, machine, providerId}` desde el pane y la terminal reales. Los borradores se indexan por máquina, terminal, proveedor y sesión. Una dirección remota nunca se trata como local.
+
+`providers/index.js` es el punto de selección del adaptador. Cada proveedor ofrece:
+
+| Operación | Contrato |
+| --- | --- |
+| `identify(target)` | Registro de sesión activo, historial y estado; o pendiente/null |
+| `list(target)`, `match(target, sessions)` | Descubrimiento opcional y sólo lectura |
+| `read(target, session)` | Historial normalizado: messages, total, truncated |
+| `status(record)` | Estado del agente |
+| `send(target, session, text, stillCurrent)` | Envío explícito con revalidación |
+| `interrupt(target, session, stillCurrent)` | Interrupción suave |
+| `blockedPreview(target, session)` | Vista previa de un diálogo, sin responderlo |
+
+Las capacidades `history`, `discovery`, `send`, `interrupt`, `blockedPreview`, `approval` y `remote` controlan la exposición de acciones. La vista no importa implementaciones concretas. El adaptador Codex delega a los métodos de v0.7, conservando hooks, registro, historial y acciones. El selector manual de Codex queda disponible sólo para un agente no identificado y local; no se usa como fallback para un agente reconocido diferente.
+
+OpenCode y Pi/Gentle Shell están reconocidos en el catálogo, pero **no tienen todavía adaptadores activos**. Remotos y aprobaciones estructuradas tampoco están habilitados. Para incorporar un agente, primero implementar y probar su registro de identidad y lector, luego registrar el adaptador y habilitar sus capacidades. No reutilizar el lector ni la identidad de Codex.
+
+La rama `stable/v0.7` preserva el estado validado antes de la refactorización.
 
 ## Flujo
 
