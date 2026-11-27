@@ -1,8 +1,8 @@
-# Install only the modified official Spaces, Agents and Workspace Status mods and their derived layout.
+# Install only the modified official Spaces, Agents, Workspace Status and Workspace Chrome mods and their derived layout.
 $ErrorActionPreference = 'Stop'
 $appHome = if ($env:HERDR_APP_HOME) { $env:HERDR_APP_HOME } else { Join-Path $HOME '.config/herdr-app' }
 if (-not (Get-Command herdr-app -ErrorAction SilentlyContinue)) { throw 'herdr-app no esta en PATH.' }
-$names = @('jec-spaces','jec-agents','jec-workspace-status')
+$names = @('jec-spaces','jec-agents','jec-workspace-status','jec-workspace-chrome')
 # Validate all before changing any installed files.
 foreach ($name in $names) {
   $source = Join-Path $PSScriptRoot "mods/$name"
@@ -23,6 +23,6 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'layouts/jec.json') -Destination
 $output = & herdr-app do layout.switch --name jec | Out-String
 $reply = $null
 try { $reply = $output | ConvertFrom-Json -ErrorAction Stop } catch { }
-if ($reply -and ($reply.ok -is [bool]) -and $reply.ok -and -not $reply.error) { Write-Host 'JEC Spaces, Agents y Workspace Status instalados. Layout jec activo.' }
+if ($reply -and ($reply.ok -is [bool]) -and $reply.ok -and -not $reply.error) { Write-Host 'JEC Spaces, Agents, Workspace Status y Chrome instalados. Layout jec activo.' }
 else { Write-Warning "Mod instalado; selecciona el layout jec en Herdr (Ctrl+Shift+L). Respuesta: $output" }
 Write-Host 'Para volver al layout oficial: herdr-app do layout.switch --name main'

@@ -8,12 +8,16 @@ test("machine summary isolates machines including empty groups and counts all sp
  assert.equal(machineSummary(data,null).count,2);assert.equal(machineSummary(data,null).active,false);
  assert.equal(machineSummary(data,"offline").count,0);
 });
-test("layout uses official components except spaces, agents and status",()=>{
+test("layout uses official components except spaces, agents, status and chrome",()=>{
  const l=JSON.parse(read("layouts/jec.json"));
  function find(n,id){return n.id===id?n:(n.children??[]).map(x=>find(x,id)).find(Boolean);}
  assert.equal(find(l,"spaces").content.mod,"jec-spaces");
  assert.equal(find(l,"agents").content.mod,"jec-agents");
  assert.equal(find(l,"status").content.mod,"jec-workspace-status");
+ assert.equal(find(l,"brand").content.mod,"jec-workspace-chrome");
+ assert.equal(find(l,"sidebar-footer").content.mod,"jec-workspace-chrome");
+ assert.equal(find(l,"sidebar-footer").size.px,97);
+ assert.equal(find(l,"sidebar-footer").content.props.footer,true);
  for(const id of ["tabs","files","changes"])assert.equal(find(l,id).content.mod,id);
  assert.equal(find(l,"main").content.pane.header.content.mod,"pane");
 });

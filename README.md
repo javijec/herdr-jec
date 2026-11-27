@@ -16,7 +16,11 @@ Partimos de Agents oficial. Conservamos sus modos Priority y Grouped by space, p
 
 La barra inferior oficial conserva la rama Git, el resumen original de agentes y el acceso a la paleta. Se añade un punto de estado del layout de la máquina activa, su nombre y un acceso directo a la configuración oficial de máquinas. El tooltip informa cuántos layouts están listos. También se muestra el espacio activo y su cantidad de pestañas; el tooltip incluye la carpeta. No se hacen consultas de CPU/RAM ni se interpreta un layout listo como una prueba de conectividad SSH. Sin nuevos procesos, timers ni dependencias.
 
-El layout jec es main oficial con tres sustituciones: spaces → jec-spaces, agents → jec-agents y workspace-status → jec-workspace-status. Los mods y el layout de fábrica no se sobrescriben.
+## v0.4 — Workspace Chrome
+
+El encabezado y pie oficiales conservan el logo, búsqueda, plegado de la barra lateral, Settings con aviso de actualización y Add machine. Se añade Machines como acceso directo a la configuración oficial, con un contador de layouts listos/total y tooltip de estados. En modo compacto permanece el icono y se señala si algún layout está indisponible. Se agregan ayudas para búsqueda y plegado. El pie aumenta 28 px para una fila adicional. No se mide conectividad SSH ni se introduce un panel, proceso o temporizador nuevo.
+
+El layout jec deriva de main con cuatro mods sustituidos: Spaces, Agents, Workspace Status y Workspace Chrome (encabezado y pie); sólo se amplía el pie en 28 px. Los mods y el layout de fábrica no se sobrescriben.
 
 ```powershell
 git pull
@@ -27,6 +31,6 @@ Volver a la interfaz original: `herdr-app do layout.switch --name main`.
 
 ## Desarrollo
 
-La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.
+La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Para Workspace Chrome usar `node scripts/derive-workspace-chrome.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.
 
-No se instala ningún otro mod JEC fuera de Spaces, Agents y Workspace Status. El trabajo anterior de Chat y Machines permanece únicamente en el historial. `restore-official.ps1` retira los mods propios conservando respaldos.
+No se instala ningún otro mod JEC fuera de Spaces, Agents, Workspace Status y Workspace Chrome. El trabajo anterior de Chat y Machines permanece únicamente en el historial. `restore-official.ps1` retira los mods propios conservando respaldos.

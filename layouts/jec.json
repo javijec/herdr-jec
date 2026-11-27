@@ -35,7 +35,7 @@
           },
           "window_drag": true,
           "content": {
-            "mod": "workspace-chrome"
+            "mod": "jec-workspace-chrome"
           }
         },
         {
@@ -70,10 +70,10 @@
           "id": "sidebar-footer",
           "type": "block",
           "size": {
-            "px": 69
+            "px": 97
           },
           "content": {
-            "mod": "workspace-chrome",
+            "mod": "jec-workspace-chrome",
             "props": {
               "footer": true
             }

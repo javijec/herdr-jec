@@ -55,7 +55,17 @@ function deriveLayout(source){
  agents.content.mod="jec-agents";
  const status=find(data,"status");
  if(status?.content?.mod!=="workspace-status")throw Error("Upstream status block changed");
- status.content.mod="jec-workspace-status";return JSON.stringify(data,null,2)+"\n";
+ status.content.mod="jec-workspace-status";
+ for(const id of ["brand","sidebar-footer"]){
+   const chrome=find(data,id);
+   if(chrome?.content?.mod!=="workspace-chrome")throw Error("Upstream chrome block changed: "+id);
+   chrome.content.mod="jec-workspace-chrome";
+   if(id==="sidebar-footer"){
+     if(!Number.isFinite(chrome.size?.px))throw Error("Upstream footer size changed");
+     chrome.size.px+=28;
+   }
+ }
+ return JSON.stringify(data,null,2)+"\n";
 }
 if(require.main===module){
  const read=p=>fs.readFileSync(path.join(root,p),"utf8").replace(/\r\n/g,"\n");
