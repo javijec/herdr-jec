@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const EVENTS = ["SessionStart", "UserPromptSubmit", "SessionEnd"];
+const EVENTS = ["SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"];
 function commandFor(script, platform = process.platform) {
   if (platform === "win32") {
     // Windows command shell: use a quoted forward-slash absolute path.
