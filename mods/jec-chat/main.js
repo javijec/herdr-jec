@@ -1,8 +1,8 @@
 import { View, div, svg, image } from "gpui-kit";
-import { v_flex, h_flex, TextView, ScrollHandle } from "gpui-base";
+import { v_flex, h_flex, TextView, ScrollHandle, TextareaState, Textarea } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
-import { listSessions, readSession, resolveCurrentSession, registeredSession } from "./providers/codex.js";
+import { listSessions, readSession, resolveCurrentSession, registeredSession, sendPrompt, terminalStatus } from "./providers/codex.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -53,6 +53,17 @@ export default class JecChat extends View {
     this.manual = false; this.stale = false; this.more = false;
     this.registered = false; this.pendingRegistration = null;
     this.scroll = ScrollHandle.new();
+    this.composer = TextareaState.new({ placeholder: "Escribí un mensaje a Codex…", rows: 3 });
+    this.draftKey = null; this.drafts = new Map();
+    this.draft = ""; this.sending = false; this.sendError = null; this.sendNotice = null;
+    this.composer.on("change", (_e, cx) => {
+      this.draft = this.composer.value();
+      if (this.draftKey) {
+        this.drafts.set(this.draftKey, this.draft);
+        if (this.drafts.size > 30) this.drafts.delete(this.drafts.keys().next().value);
+      }
+      this.sendNotice = null; cx.notify();
+    });
     this.closed = false; this.seq = 0; this.readSeq = 0;
     if (this.target.terminal && this.target.cwd && !this.target.machine && this.target.isCodex) this.scan(cx);
     if (this.embedded) cx.timer.every(400, cx => this.syncTarget(cx));
@@ -61,8 +72,9 @@ export default class JecChat extends View {
           && (!this.embedded || activeView(layout()) === "jec-chat-view")) this.refresh(cx);
     });
   }
-  close() { this.closed = true; this.seq++; this.readSeq++; }
+  close() { this.closed = true; this.seq++; this.readSeq++; this.composer.release(); }
   back() {
+    this.composer.blur();
     if (this.embedded) run("layout.select", { stack: "jec-view", child: "main" });
     else closeOverlay(props()?.overlay);
   }
@@ -73,6 +85,7 @@ export default class JecChat extends View {
     const changed = (next?.terminal ?? null) !== old?.terminal || (next?.cwd ?? null) !== old?.cwd
       || (next?.pane ?? null) !== old?.pane;
     if (changed) {
+      this.composer.blur(); this.bindDraft(null);
       this.target = next ?? emptyTarget();
       this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
       this.manual = false; this.error = null; this.loading = false; this.reading = false;
@@ -122,6 +135,7 @@ export default class JecChat extends View {
     this.pendingRegistration = direct.pending ? direct.id : null;
     this.sessions = []; this.more = false;
     this.selected = direct.session ?? null;
+    this.bindDraft(this.selected ? this.target.terminal + "/" + this.selected.id : null);
     this.matchMethod = direct.method ?? "registro Codex";
     this.messages = direct.data?.messages ?? [];
     this.total = direct.data?.total ?? this.messages.length;
@@ -130,6 +144,7 @@ export default class JecChat extends View {
     this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
   }
   choose(session, cx) {
+    this.bindDraft(null);
     this.registered = false; this.pendingRegistration = null;
     this.selected = session; this.messages = []; this.total = 0; this.error = null;
     this.readSeq++; this.reading = false;
@@ -163,6 +178,7 @@ export default class JecChat extends View {
         else {
           // SessionEnd removed the label; do not show the ended session.
           this.registered = false; this.pendingRegistration = null;
+          this.bindDraft(null);
           this.selected = null; this.messages = []; this.total = 0;
           this.matchMethod = null; this.sessions = [];
         }
@@ -172,6 +188,81 @@ export default class JecChat extends View {
         if (seq === this.seq && readSeq === this.readSeq) { this.reading = false; cx.notify(); }
       }
     });
+  }
+  bindDraft(key) {
+    if (key === this.draftKey) return;
+    this.draftKey = key;
+    this.draft = key ? this.drafts.get(key) ?? "" : "";
+    this.composer.set_value(this.draft);
+    this.sendError = null; this.sendNotice = null;
+  }
+  agentState(target = this.target) {
+    return terminalStatus(terminals().find(x => x.address === target?.terminal));
+  }
+  send(cx) {
+    if (this.closed || this.sending || this.loading || !this.registered || !this.selected) return;
+    const target = this.target, session = this.selected, key = this.draftKey, seq = this.seq;
+    const prompt = this.composer.value();
+    if (!key || !prompt.trim()) return;
+    const current = () => {
+      if (this.closed || this.seq !== seq || this.draftKey !== key || !this.registered
+          || this.selected?.id !== session.id || this.target?.terminal !== target.terminal) return false;
+      if (!this.embedded) return true;
+      const live = embeddedTarget();
+      return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane;
+    };
+    if (!current()) return;
+    this.sending = true; this.sendError = null; this.sendNotice = null; cx.notify();
+    cx.spawn(async cx => {
+      try {
+        await sendPrompt(target, session, prompt, current);
+        // Never erase edits or another session's draft made during the send.
+        if (this.drafts.get(key) === prompt) this.drafts.delete(key);
+        if (current()) {
+          if (this.composer.value() === prompt) {
+            this.composer.set_value(""); this.draft = "";
+          }
+          this.sendNotice = "Mensaje enviado · esperando respuesta";
+          this.refresh(cx);
+        }
+      } catch (e) {
+        if (current()) this.sendError = String(e?.message ?? e);
+      } finally {
+        this.sending = false;
+        if (!this.closed) cx.notify();
+      }
+    });
+  }
+  composerView(t, target) {
+    if (!this.registered || !this.selected) {
+      return div().flex_none().h(27).border_t(1).border_color(t.border).px(12)
+        .flex().items_center().text_size(11).text_color(t.muted).truncate()
+        .child("Solo lectura · vinculá la sesión mediante los hooks de Codex para enviar mensajes.");
+    }
+    const state = this.agentState(target);
+    const ready = state === "idle" && !this.loading && !this.sending;
+    const enabled = ready && Boolean(this.draft.trim());
+    const status = this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención · abrí Terminal"
+      : state === "working" ? "Codex está trabajando" : state === "idle" ? "Codex listo"
+      : "Esperando estado de Codex";
+    return v_flex().flex_none().border_t(1).border_color(t.border).px(12).py(8).gap(6)
+      .child(h_flex().items_center().gap(8)
+        .child(div().flex_1().min_w(0)
+          .child(Textarea.new(this.composer).w_full().h(64).px(9).py(6).rounded(7)
+            .border_1().border_color(t.input || t.border).bg(t.raised).text_color(t.foreground).text_size(13)))
+        .child(div().id("jec-send").h(32).px(12).rounded(7).flex_none().flex().items_center()
+          .font_medium().text_size(12).bg(enabled ? t.solid : t.raised)
+          .text_color(enabled ? t.solid_foreground : t.dim)
+          .border_1().border_color(enabled ? t.solid : t.border)
+          .when(enabled, el => el.cursor_pointer().hover(x => x.opacity(0.88))
+            .on_click((_e, cx) => { cx.stop_propagation(); this.send(cx); }))
+          .child(this.sending ? "Enviando…" : "Enviar")))
+      .child(h_flex().items_center().gap(8)
+        .child(div().text_size(11).text_color(state === "blocked" ? t.blocked : t.muted).child(status))
+        .child(div().flex_1())
+        .child(div().text_size(11).text_color(t.dim).child("Enter: nueva línea")))
+      .when(Boolean(this.sendError), el => el.child(div().text_size(11).text_color(t.blocked).child(this.sendError)))
+      .when(Boolean(this.sendNotice) && !this.sendError, el => el.child(div().text_size(11).text_color(t.muted).child(this.sendNotice)));
   }
   sessionPicker(t) {
     return v_flex().gap(8).p(14)
@@ -293,11 +384,6 @@ export default class JecChat extends View {
             .children(this.messages.map((m, i) => this.message(t, m, i)))
             .when(!this.messages.length, el => el.child(div().p(12).text_color(t.muted)
               .child(this.reading ? "Cargando mensajes…" : "Esta sesión no tiene mensajes legibles."))))
-          .child(div().flex_none().h(this.embedded ? 27 : 39)
-            .border_t(1).border_color(t.border).px(12).flex().items_center()
-            .text_size(11).text_color(t.muted).truncate()
-            .child(this.embedded
-              ? "Solo lectura · Para escribir o aprobar acciones, elegí Terminal"
-              : "Solo lectura · Para escribir o aprobar acciones, elegí Terminal. La sesión sigue ejecutándose."))));
+          .child(this.composerView(t, target))));
   }
 }
