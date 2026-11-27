@@ -52,7 +52,10 @@ function deriveLayout(source){
  block.content.mod="jec-spaces";
  const agents=find(data,"agents");
  if(agents?.content?.mod!=="agents")throw Error("Upstream agents block changed");
- agents.content.mod="jec-agents";return JSON.stringify(data,null,2)+"\n";
+ agents.content.mod="jec-agents";
+ const status=find(data,"status");
+ if(status?.content?.mod!=="workspace-status")throw Error("Upstream status block changed");
+ status.content.mod="jec-workspace-status";return JSON.stringify(data,null,2)+"\n";
 }
 if(require.main===module){
  const read=p=>fs.readFileSync(path.join(root,p),"utf8").replace(/\r\n/g,"\n");
