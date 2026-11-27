@@ -8,7 +8,7 @@ Abre el historial nativo de una sesion Codex en un dialogo **dentro de Herdr**. 
 
 - Windows 10/11, Linux y macOS (requiere Node.js >= 20 y Herdr Desktop).
 - Lee `~/.codex/sessions/**/rollout-*.jsonl` o `$CODEX_HOME/sessions`.
-- Si encuentra varias sesiones en la carpeta, **exige elegir una** en lugar de adivinar.
+- Exige **elegir explícitamente** la sesión de la carpeta, incluso si hay una sola coincidencia: el directorio no prueba qué sesión controla la terminal.
 - Refresca la conversacion cada 4 segundos mientras esta abierta.
 - Por ahora solo local: maquinas remotas, envio de mensajes y permisos interactivos quedan para siguientes versiones.
 
