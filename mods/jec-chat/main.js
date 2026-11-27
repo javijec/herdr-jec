@@ -92,7 +92,7 @@ export default class JecChat extends View {
       if (this.closed || (!this.selected && !this.pendingRegistration) || this.reading || this.loading || appWindow()?.visible === false
           || (this.embedded && activeView(layout()) !== "jec-chat-view")) return;
       const state = this.agentState();
-      const busy = this.sending || this.waitingFor || this.interrupting || state === "working" || state === "blocked";
+      const busy = this.sending || (this.waitingFor && !this.waitingFor.expired) || this.interrupting || state === "working" || state === "blocked";
       const interval = busy ? 1000 : 2500;
       if (Date.now() - this.lastPoll >= interval) { this.lastPoll = Date.now(); this.refresh(cx); }
     });
@@ -174,8 +174,8 @@ export default class JecChat extends View {
         || ["working", "blocked"].includes(this.coreStatus))) {
       this.waitingFor = null; this.sendNotice = null;
     }
-    if (this.waitingFor && Date.now() - this.waitingFor.at > 15000) {
-      this.waitingFor = null;
+    if (this.waitingFor && !this.waitingFor.expired && Date.now() - this.waitingFor.at > 15000) {
+      this.waitingFor.expired = true;
       this.sendNotice = "Herdr entregó el mensaje. Si no aparece en el historial, revisá Terminal.";
     }
     if (this.coreStatus !== "blocked") this.dialog = null;
