@@ -35,7 +35,7 @@ test("registration reads only the registered rollout, never lists sessions or re
   assert.equal(calls.length,2);
   calls.length=0;
   entry={...entry,file:null};
-  assert.deepEqual(await registeredSession(cwd,"t1q"),{pending:true,id:ID});
+  assert.deepEqual(await registeredSession(cwd,"t1q"),{pending:true,id:ID,status:null});
   assert.equal(calls.length,1);
   entry=null;
   assert.equal(await registeredSession(cwd,"t1q"),null);
@@ -87,4 +87,12 @@ test("send rejects manual history, remote targets, shell commands, and terminal 
   assert.equal(validatePrompt("Hola\r\nmundo"),"Hola\nmundo");
   await assert.rejects(sendPrompt({...target,machine:"server"},session,"hola"),/terminal local/);
   await assert.rejects(sendPrompt(target,null,"hola"),/terminal local/);
+});
+
+test("core status uses the actual report instead of a derived UI state", async () => {
+  const { terminalStatus } = await provider();
+  assert.equal(terminalStatus({status:"done",report:{state:"idle"}}),"idle");
+  assert.equal(terminalStatus({status:{state:"working"}}),"working");
+  assert.equal(terminalStatus({status:"IDLE"}),"idle");
+  assert.equal(terminalStatus({}),null);
 });
