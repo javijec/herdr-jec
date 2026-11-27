@@ -25,7 +25,7 @@ function apply(input, env = process.env, call = hc) {
     if (current?.id !== id) return false;
     return call(["label", terminal, LABEL + "="]) !== null;
   }
-  if (!["SessionStart", "UserPromptSubmit"].includes(event)) return false;
+  if (!["SessionStart", "UserPromptSubmit", "Stop"].includes(event)) return false;
   if (typeof input.cwd !== "string" || !path.isAbsolute(input.cwd)) return false;
   const file = typeof input.transcript_path === "string" && path.isAbsolute(input.transcript_path)
     ? input.transcript_path : null;
