@@ -1,4 +1,4 @@
-# jec-chat v0.2 — alcance y contrato
+# jec-chat v0.3 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 
@@ -8,7 +8,7 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 2. Seleccionar una terminal Codex local; el encabezado `jec-pane` ofrece el botón **Chat**.
 3. Chat y Terminal son bloques de un `stack` del layout, así que el mismo terminal sigue funcionando. La selección se vincula al pane y su dirección exacta; al cambiar de tab, el chat no muestra datos de la pestaña anterior.
 4. El lector Node local busca `session_meta.payload.cwd` en los rollout de Codex.
-5. Una o varias coincidencias: selector explícito. Nunca se deduce la sesión activa solo por la carpeta. Ninguna: aviso.
+5. Al abrir Chat, consulta `hc get --json <terminal>` y `hc read <terminal> --lines 80`. Intenta identificar la sesión por UUID explícito en `codex resume <UUID>` o una respuesta distintiva que coincida con la pantalla real. Si hay varias coincidencias o evidencia insuficiente, aparece el selector. Ninguna: aviso.
 6. Renderiza mensajes y herramientas del JSONL con `TextView.markdown`.
 7. **Terminal** cambia al bloque original `main` sin detener nada; la sesión seleccionada se conserva al alternar. La paleta sigue abriendo la ventana de chat anterior en el layout base.
 
@@ -17,8 +17,9 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 - El lector sólo lee archivos regulares dentro del directorio de sesiones Codex y
   verifica que `session_meta.payload.cwd` coincida con el `cwd` elegido.
 - No se envía texto al agente, no se usan claves de API, no se alteran sesiones.
-- Incluso con un único Codex encontrado en la carpeta, no puede inferirse con certeza cuál usa la
-  terminal actual: el usuario debe seleccionar.
+- Ni la fecha de actualización, ni una carpeta compartida, ni la existencia de una sola sesión prueban por sí solas la identidad activa.
+- La identificación por pantalla compara hasta 10 sesiones; con más sesiones y sin UUID explícito se utiliza el selector.
+- Tras un cambio de la TUI a Chat, se reevalúa la sesión: Codex puede cambiar de conversación con `/new` o `/resume`.
 - La detección de Codex depende de los metadatos de programa de Herdr;
   se ofrece búsqueda manual cuando no hay un indicador fiable.
 - Limitado a las últimas 80 filas (hasta 12k caracteres por fila) y a sesiones
