@@ -164,7 +164,8 @@ export default class JecChat extends View {
   acceptRegistration(direct) {
     this.registered = true;
     this.coreStatus = direct.status ?? null;
-    this.pendingRegistration = direct.pending ? direct.id : null;
+    this.pendingRegistration = direct.pending ? (direct.id ?? "pending") : null;
+    this.pendingReason = direct.pending ? direct.reason ?? null : null;
     this.sessions = []; this.more = false;
     this.selected = direct.session ?? null;
     this.bindDraft(sessionKey(this.target, this.provider, this.selected));
@@ -429,7 +430,7 @@ export default class JecChat extends View {
       .child(div().flex_1().min_w(0).truncate().text_color(t.dim)
         .text_size(this.embedded ? 12 : 11).child(cwd))
       .child(button(t, "jec-terminal", this.embedded ? "Terminal" : "← Terminal", () => this.back(), false, this.embedded))
-      .when(!this.embedded && Boolean(this.selected), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => this.resetChoice(cx))))
+      .when(!this.embedded && Boolean(this.selected) && Boolean(this.provider?.capabilities.discovery), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => this.resetChoice(cx))))
       .when(!this.embedded, el => el.child(button(t, "jec-refresh", "Actualizar", cx => {
         if (this.selected) this.refresh(cx);
         else this.scan(cx);
@@ -465,11 +466,11 @@ export default class JecChat extends View {
       .when(canRead && this.loading, el => el.child(div().p(16).text_color(t.muted).child("Buscando sesiones de " + name + "…")))
       .when(canRead && !this.loading && !this.selected && !this.pendingRegistration && this.sessions.length > 0, el => el.child(this.sessionPicker(t)))
       .when(canRead && !this.loading && Boolean(this.pendingRegistration), el => el.child(v_flex().p(16).gap(10)
-        .child(div().text_color(t.muted).child("Sesión registrada: " + this.pendingRegistration.slice(0, 12)))
-        .child(div().text_color(t.dim).child("Esperando un historial legible de " + name + ". Se actualizará automáticamente."))
+        .child(div().text_color(t.muted).child(this.pendingRegistration === "pending" ? "Esperando la sesión activa de " + name : "Sesión registrada: " + this.pendingRegistration.slice(0, 12)))
+        .child(div().text_color(t.dim).child(this.pendingReason ?? ("Esperando un historial legible de " + name + ". Se actualizará automáticamente.")))
         .child(h_flex().gap(8)
           .child(button(t, "jec-pending-retry", "Actualizar", cx => this.refresh(cx), false, this.embedded))
-          .child(button(t, "jec-pending-pick", "Buscar manualmente", cx => this.resetChoice(cx), false, this.embedded)))))
+          .when(Boolean(this.provider?.capabilities.discovery), row => row.child(button(t, "jec-pending-pick", "Buscar manualmente", cx => this.resetChoice(cx), false, this.embedded))))))
       .when(canRead && !this.loading && !this.selected && !this.pendingRegistration && this.sessions.length === 0, el =>
         el.child(div().p(18).text_color(t.muted).child(
           "No se encontró una sesión activa de " + name + ". Iniciá el agente en la terminal o volvé a abrir Chat.")))
@@ -486,7 +487,7 @@ export default class JecChat extends View {
             .when(this.stale, el => el.child(div().text_size(11).text_color(t.dim).child("Últimos mensajes")))
             .child(div().flex_1().min_w(0))
             .when(this.embedded, el => el
-              .child(button(t, "jec-choose-inline", "Sesión", cx => this.resetChoice(cx), false, true))
+              .when(Boolean(this.provider?.capabilities.discovery), row => row.child(button(t, "jec-choose-inline", "Sesión", cx => this.resetChoice(cx), false, true)))
               .child(button(t, "jec-refresh-inline", "↻", cx => this.refresh(cx), false, true))))
           .child(v_flex().id("jec-chat-scroll").flex_1().min_h(0).overflow_y_scrollbar()
             .track_scroll(this.scroll).p(12).gap(10)
