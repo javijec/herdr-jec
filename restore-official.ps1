@@ -29,7 +29,7 @@ $scripts = @($appHomes | ForEach-Object { Join-Path $_ 'mods/jec-chat/providers/
 & node (Join-Path $PSScriptRoot 'scripts/disable-chat-hooks.cjs') @scripts
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron desactivar los hooks JEC; no se movieron los mods.' }
 foreach ($root in $appHomes) {
-  foreach ($name in @('jec-chat','jec-pane','jec-chat-native','jec-machines','jec-spaces')) { Backup-Jec (Join-Path $root "mods/$name") $name }
+  foreach ($name in @('jec-chat','jec-pane','jec-chat-native','jec-machines','jec-spaces','jec-agents')) { Backup-Jec (Join-Path $root "mods/$name") $name }
   foreach ($name in @('jec-chat.json','jec-chat-native.json','jec.json')) { Backup-Jec (Join-Path $root "layouts/$name") $name }
 }
 $ocConfig = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } elseif ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME 'opencode' } else { Join-Path $HOME '.config/opencode' }

@@ -8,11 +8,12 @@ test("machine summary isolates machines including empty groups and counts all sp
  assert.equal(machineSummary(data,null).count,2);assert.equal(machineSummary(data,null).active,false);
  assert.equal(machineSummary(data,"offline").count,0);
 });
-test("layout uses official components except spaces",()=>{
+test("layout uses official components except spaces and agents",()=>{
  const l=JSON.parse(read("layouts/jec.json"));
  function find(n,id){return n.id===id?n:(n.children??[]).map(x=>find(x,id)).find(Boolean);}
  assert.equal(find(l,"spaces").content.mod,"jec-spaces");
- for(const id of ["agents","tabs","files","changes"])assert.equal(find(l,id).content.mod,id);
+ assert.equal(find(l,"agents").content.mod,"jec-agents");
+ for(const id of ["tabs","files","changes"])assert.equal(find(l,id).content.mod,id);
  assert.equal(find(l,"main").content.pane.header.content.mod,"pane");
 });
 test("generated files exactly match pinned official sources plus explicit changes",{skip:!fs.existsSync(path.join(root,"upstream/herdr-app/defaults/mods/spaces/main.js"))},()=>{

@@ -49,7 +49,10 @@ function deriveLayout(source){
  function find(n,id){return n.id===id?n:(n.children??[]).map(x=>find(x,id)).find(Boolean);}
  const block=find(data,"spaces");
  if(block?.content?.mod!=="spaces")throw Error("Upstream spaces block changed");
- block.content.mod="jec-spaces";return JSON.stringify(data,null,2)+"\n";
+ block.content.mod="jec-spaces";
+ const agents=find(data,"agents");
+ if(agents?.content?.mod!=="agents")throw Error("Upstream agents block changed");
+ agents.content.mod="jec-agents";return JSON.stringify(data,null,2)+"\n";
 }
 if(require.main===module){
  const read=p=>fs.readFileSync(path.join(root,p),"utf8").replace(/\r\n/g,"\n");
