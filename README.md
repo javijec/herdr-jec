@@ -81,6 +81,20 @@ Se consumen campos opcionales de los reportes OSC 7501 que Herdr expone en termi
 
 Referencia: [Herdr Core status](https://github.com/herdrdev/herdr-core/blob/master/crates/herdr-core/src/status.rs), [Gentle Shell desktop status](https://github.com/Gentleman-Programming/gentle-shell/blob/main/extensions/gentle-herdr-desktop-status.ts). Se tolera que versiones anteriores no expongan todos los campos.
 
+## v0.9 — Personalización
+
+El instalador crea `jec-settings.json` en HERDR_APP_HOME (por defecto ~/.config/herdr-app). Se conserva entre actualizaciones y se combina con los nuevos valores por defecto. Editar con un editor de texto y ejecutar de nuevo install.ps1 para aplicar. No se modifica el settings.json oficial.
+
+```powershell
+$appHome = if ($env:HERDR_APP_HOME) { $env:HERDR_APP_HOME } else { Join-Path $HOME '.config/herdr-app' }
+notepad (Join-Path $appHome 'jec-settings.json')
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Opciones: mods activos; status.metrics (desactiva todas las consultas), status.refreshSeconds (15–300), status.cpu/ram/disk/temperature (visibilidad de cada métrica), status.space/branch/agentSummary; agents.durations/progress/unreported (visibilidad de duración y porcentaje en filas, y sección No status); chrome.machines (oculta la fila y recupera 28 px). El tooltip nativo puede seguir incluyendo reportes de progreso. Las métricas individuales ocultas no reducen por sí solas el trabajo del sondeo; desactivar metrics o todos los campos sí lo detiene. El intervalo de obsolescencia se adapta al periodo de muestreo.
+
+También se admite `-ConfigPath ruta.json` para importar una configuración, y `-Mods` para cambiar la selección persistida. Opciones desconocidas, tipos inválidos o intervalos fuera de rango abortan antes de modificar los archivos. El respaldo incluye la configuración anterior. Se mantiene el archivo al restaurar Herdr oficial para una reinstalación posterior.
+
 ## Desarrollo
 
 La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Para Workspace Chrome usar `node scripts/derive-workspace-chrome.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.

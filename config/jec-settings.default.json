@@ -1,0 +1,27 @@
+{
+  "mods": [
+    "spaces",
+    "agents",
+    "workspace-status",
+    "workspace-chrome"
+  ],
+  "status": {
+    "metrics": true,
+    "refreshSeconds": 15,
+    "cpu": true,
+    "ram": true,
+    "disk": true,
+    "temperature": true,
+    "space": true,
+    "branch": true,
+    "agentSummary": true
+  },
+  "agents": {
+    "durations": true,
+    "progress": true,
+    "unreported": true
+  },
+  "chrome": {
+    "machines": true
+  }
+}

@@ -12,6 +12,8 @@ for(const entry of profile.mods){
 }
 const canonical=read("shared/agent-summary.js");
 for(const name of ["jec-agents","jec-workspace-status"])assert.equal(read("mods/"+name+"/agent-summary.js"),canonical);
+const preferences=read("shared/preferences.js");
+for(const name of ["jec-agents","jec-workspace-status","jec-workspace-chrome"])assert.equal(read("mods/"+name+"/preferences.js"),preferences);
 const upstream=path.join(root,"upstream/herdr-app/defaults");
 if(fs.existsSync(upstream)){
  for(const entry of profile.mods){

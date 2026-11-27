@@ -1,12 +1,44 @@
-# JEC v0.5: install selected extensions without changing stock mods.
+# JEC v0.9: install selected extensions without changing stock mods.
 param(
   [ValidateSet('spaces','agents','workspace-status','workspace-chrome')]
-  [string[]]$Mods = @('spaces','agents','workspace-status','workspace-chrome')
+  [string[]]$Mods,
+  [string]$ConfigPath
 )
 $ErrorActionPreference = 'Stop'
 $appHome = if ($env:HERDR_APP_HOME) { $env:HERDR_APP_HOME } else { Join-Path $HOME '.config/herdr-app' }
 if (-not (Get-Command herdr-app -ErrorAction SilentlyContinue)) { throw 'herdr-app no esta en PATH.' }
 $profile = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$settingsPath = Join-Path $appHome 'jec-settings.json'
+$settings = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'config/jec-settings.default.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$inputPath = if ($ConfigPath) { $ConfigPath } else { $settingsPath }
+if ($ConfigPath -and -not (Test-Path -LiteralPath $inputPath -PathType Leaf)) { throw "No existe: $inputPath" }
+if (Test-Path -LiteralPath $inputPath -PathType Leaf) {
+  $user = Get-Content -LiteralPath $inputPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($null -eq $user -or $user -isnot [pscustomobject]) { throw 'Configuracion JEC invalida: se espera un objeto JSON.' }
+  foreach ($section in $user.PSObject.Properties) {
+    if ($section.Name -notin @('mods','status','agents','chrome')) { throw "Opcion desconocida: $($section.Name)" }
+    if ($section.Name -eq 'mods') {
+      if ($section.Value -isnot [array] -or $section.Value.Count -eq 0) { throw 'mods debe ser una lista no vacia.' }
+      foreach ($name in $section.Value) {
+        if ($name -isnot [string] -or $name -notin $profile.mods.name) { throw "Mod desconocido: $name" }
+      }
+      $settings.mods = @($section.Value | Select-Object -Unique)
+      continue
+    }
+    if ($section.Value -isnot [pscustomobject]) { throw "$($section.Name) debe ser un objeto JSON." }
+    $target = $settings.($section.Name)
+    foreach ($option in $section.Value.PSObject.Properties) {
+      if ($null -eq $target.PSObject.Properties[$option.Name]) { throw "Opcion desconocida: $($section.Name).$($option.Name)" }
+      $value = $option.Value
+      if ($option.Name -eq 'refreshSeconds') {
+        if (($value -isnot [int] -and $value -isnot [long]) -or $value -lt 15 -or $value -gt 300) { throw 'refreshSeconds debe ser un entero entre 15 y 300.' }
+      } elseif ($value -isnot [bool]) { throw "$($section.Name).$($option.Name) debe ser true o false." }
+      $target.($option.Name) = $value
+    }
+  }
+}
+if ($PSBoundParameters.ContainsKey('Mods')) { $settings.mods = @($Mods | Select-Object -Unique) }
+$Mods = @($settings.mods)
 $selected = @($profile.mods | Where-Object { $_.name -in $Mods })
 if ($selected.Count -eq 0) { throw 'Selecciona al menos un mod; para volver a Herdr oficial usa restore-official.ps1.' }
 $layout = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'layouts/jec.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -24,6 +56,17 @@ foreach ($entry in $profile.mods) {
     if ($entry.name -notin $Mods) {
       $block.content.mod = $entry.name
       if ($id -eq 'sidebar-footer') { $block.size.px -= $entry.footerExtra }
+    } else {
+      $options = switch ($entry.name) {
+        'agents' { $settings.agents }
+        'workspace-status' { $settings.status }
+        'workspace-chrome' { $settings.chrome }
+      }
+      if ($null -ne $options) {
+        if ($null -eq $block.content.props) { $block.content | Add-Member -MemberType NoteProperty -Name props -Value ([pscustomobject]@{}) }
+        $block.content.props | Add-Member -MemberType NoteProperty -Name jec -Value $options -Force
+      }
+      if ($id -eq 'sidebar-footer' -and -not $settings.chrome.machines) { $block.size.px -= $entry.footerExtra }
     }
   }
 }
@@ -43,7 +86,7 @@ foreach ($entry in $selected) {
 }
 $backupRoot = Join-Path $appHome ('jec-backups/install-' + [guid]::NewGuid().ToString('N'))
 $layoutPath = Join-Path $appHome 'layouts/jec.json'
-$targets = @($selected | ForEach-Object { "mods/$($_.id)" }) + @('layouts/jec.json')
+$targets = @($selected | ForEach-Object { "mods/$($_.id)" }) + @('layouts/jec.json','jec-settings.json')
 # Do not overwrite files while the JEC layout is active.
 Switch-Layout 'main'
 New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
@@ -68,6 +111,7 @@ try {
   New-Item -ItemType Directory -Path (Split-Path -Parent $layoutPath) -Force | Out-Null
   # UTF-8 without BOM (also on Windows PowerShell 5.1).
   [IO.File]::WriteAllText($layoutPath, ($layout | ConvertTo-Json -Depth 80), (New-Object System.Text.UTF8Encoding($false)))
+  [IO.File]::WriteAllText($settingsPath, ($settings | ConvertTo-Json -Depth 20), (New-Object System.Text.UTF8Encoding($false)))
   Switch-Layout 'jec'
 } catch {
   $failure = $_
@@ -81,4 +125,5 @@ try {
 }
 Write-Host "JEC $($profile.version) activo: $($selected.name -join ', ')"
 Write-Host "Respaldo: $backupRoot"
+Write-Host "Configuracion: $settingsPath"
 Write-Host 'Volver al original: herdr-app do layout.switch --name main'
