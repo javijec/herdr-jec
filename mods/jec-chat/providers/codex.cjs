@@ -75,6 +75,14 @@ function blocks(content) {
     && typeof x.text === "string").map(x => x.text).join("\n").trim();
 }
 function cap(s) { return s.length > MAX_ROW_CHARS ? s.slice(0, MAX_ROW_CHARS) + "\n\n… (recortado)" : s; }
+// Codex writes an environment snapshot as a synthetic user message at
+// session startup. It is not a human prompt and should not appear in chat.
+// Strip only a complete *leading* snapshot, preserving a genuine prompt
+// appended after it and leaving later/literal mentions of the tag alone.
+function humanText(text) {
+  if (typeof text !== "string") return "";
+  return text.replace(/^\s*<environment_context>[\s\S]*?<\/environment_context>\s*/, "").trim();
+}
 async function transcript(file) {
   const response = [], usersByEvent = [], usersByItem = [], assistantByEvent = [];
   let order = 0;
@@ -88,7 +96,8 @@ async function transcript(file) {
       const p = x.payload ?? {};
       if (x.type === "event_msg") {
         if (p.type === "user_message" && typeof p.message === "string") {
-          usersByEvent.push({ order, role: "user", text: cap(p.message), time: x.timestamp });
+          const text = humanText(p.message);
+          if (text) usersByEvent.push({ order, role: "user", text: cap(text), time: x.timestamp });
         } else if (p.type === "agent_message" && typeof p.message === "string") {
           assistantByEvent.push({ order, role: "assistant", text: cap(p.message), time: x.timestamp });
         }
@@ -98,7 +107,10 @@ async function transcript(file) {
           if (!value) continue;
           const item = { order, role: p.role, text: cap(value), time: x.timestamp,
             phase: p.phase ?? null };
-          if (p.role === "user") usersByItem.push(item);
+          if (p.role === "user") {
+            const text = humanText(value);
+            if (text) usersByItem.push({ ...item, text: cap(text) });
+          }
           if (p.role === "assistant") response.push(item);
         } else if (["function_call", "custom_tool_call", "local_shell_call", "web_search_call"].includes(p.type)) {
           const name = p.name ?? (p.type === "local_shell_call" ? "shell" : p.type === "web_search_call" ? "web_search" : "tool");
