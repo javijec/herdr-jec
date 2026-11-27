@@ -8,8 +8,9 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { panes, props, run, theme, home, layout, spaces, setShared } from "herdr";
+import { panes, props, run, theme, home, layout, spaces, shared, setShared } from "herdr";
 import { detectAgent, supportsChat } from "./provider-catalog.js";
+import { VIEW_KEY, activeTab, wantedPane, rememberChat, activeView } from "./view-state.js";
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -47,7 +48,22 @@ function folder(cwd) {
 }
 
 export default class Pane extends View {
-  init() { this.hovered = false; }
+  init(_props, cx) {
+    this.hovered = false;
+    // The embedded chat may be unmounted when Terminal is visible. The
+    // visible pane header restores the remembered view without relying on
+    // a hidden chat timer. Only the exact remembered pane can switch.
+    cx.timer.every(250, () => this.restoreChat());
+  }
+  restoreChat() {
+    if (activeView(layout()) !== "main") return;
+    const active = activeTab(spaces());
+    const p = this.me();
+    const wanted = wantedPane(shared(VIEW_KEY), active, panes());
+    if (!wanted || !p || p.pane !== wanted.pane || p.terminal !== wanted.terminal
+        || p.tab !== active?.tab || !chatAvailable(p)) return;
+    run("layout.select", { stack: "jec-view", child: "jec-chat-view" });
+  }
 
   me() {
     return panes().find((p) => p.pane === props()?.pane);
@@ -76,9 +92,9 @@ export default class Pane extends View {
       .on_click((_e, cx) => {
         cx.stop_propagation();
         // This is the exact pane/terminal, never a guess based on cwd.
-        setShared("jec.chat.target", {
-          terminal: p.terminal, pane: p.pane, tab: p.tab, cwd: p.cwd
-        });
+        const active = activeTab(spaces());
+        if (p.tab !== active?.tab || !chatAvailable(p)) return;
+        setShared(VIEW_KEY, rememberChat(shared(VIEW_KEY), active, p));
         run("layout.select", { stack: "jec-view", child: "jec-chat-view" });
       }).child("Chat");
   }

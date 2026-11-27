@@ -1,4 +1,6 @@
-# jec-chat v0.11 — alcance y contrato
+# jec-chat v0.11.1 — alcance y contrato
+
+La preferencia Chat/Terminal se guarda en shared `jec.chat.views.v1`, por espacio y pestaña, con identidad de pane y terminal (hasta 128 entradas). La transición automática hacia Terminal no borra la preferencia. El encabezado visible restaura Chat cuando corresponde; el mod Chat valida la identidad antes de leer o actuar. No cambia el layout original ni habilita vistas simultáneas por split.
 
 La recuperación de registros de proveedores sin descubrimiento permanece en espera y reintenta mientras Chat está visible. Las acciones en curso comparan ID y generación/archivo de registro; el borrador conserva su clave por conversación. OpenCode no usa el estado del core como sustituto de un estado combinado desconocido para habilitar el envío.
 

@@ -1,9 +1,10 @@
 import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle, TextareaState, Textarea } from "gpui-base";
-import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
+import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, setShared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
 import { providerFor, providerName, sessionKey, sameActiveSession, allowsAction } from "./providers/index.js";
 import { supportsChat } from "./provider-catalog.js";
+import { VIEW_KEY, activeTab, wantedPane, forgetChat, activeView } from "./view-state.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -13,32 +14,19 @@ function button(t, id, label, onClick, active = false, compact = false) {
     .on_click((_e, cx) => { cx.stop_propagation(); onClick(cx); }).child(label);
 }
 
-// Layout-owned chat: the pane header supplies the exact terminal identity.
-// Recheck it before every view change so switching Spaces/Tabs cannot show
-// an unrelated Codex conversation from another terminal in the same folder.
+// Resolve only the remembered pane of the CURRENT tab/space. A different
+// tab may have its own Chat preference, or may remain in Terminal.
 function embeddedTarget() {
-  const wanted = shared("jec.chat.target");
-  if (!wanted?.terminal || !wanted?.pane || !wanted?.tab) return null;
-  const currentSpace = spaces().find(space => space.active);
-  const activeTab = currentSpace?.tabs?.find(tab => tab.active)?.id;
-  if (!activeTab || wanted.tab !== activeTab) return null;
-  const p = panes().find(p => p.pane === wanted.pane && p.terminal === wanted.terminal && p.tab === wanted.tab);
-  if (!p) return null;
+  const allSpaces = spaces(), allPanes = panes();
+  const active = activeTab(allSpaces);
+  const wanted = wantedPane(shared(VIEW_KEY), active, allPanes);
+  if (!wanted) return null;
   const candidate = resolveTarget({
-    focus: { pane: p.pane, terminal: p.terminal, space: currentSpace.id },
-    allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
+    focus: { pane: wanted.pane, terminal: wanted.terminal, space: active.space },
+    allPanes, allSpaces, allTerminals: terminals(),
   });
   return supportsChat(candidate) && candidate.terminal === wanted.terminal
-    ? { ...candidate, tab: p.tab } : null;
-}
-function activeView(tree) {
-  if (!tree) return null;
-  if (tree.id === "jec-view") return tree.active;
-  for (const child of tree.children ?? []) {
-    const found = activeView(child);
-    if (found) return found;
-  }
-  return null;
+    ? { ...candidate, tab: wanted.tab, space: active.space } : null;
 }
 const emptyTarget = () => ({ terminal: null, pane: null, cwd: null, machine: null, providerId: null });
 
@@ -102,8 +90,11 @@ export default class JecChat extends View {
   close() { this.closed = true; this.seq++; this.readSeq++; this.composer.release(); }
   back() {
     this.composer.blur();
-    if (this.embedded) run("layout.select", { stack: "jec-view", child: "main" });
-    else closeOverlay(props()?.overlay);
+    if (this.embedded) {
+      // An explicit Terminal click changes ONLY this tab's preference.
+      setShared(VIEW_KEY, forgetChat(shared(VIEW_KEY), activeTab(spaces())));
+      run("layout.select", { stack: "jec-view", child: "main" });
+    } else closeOverlay(props()?.overlay);
   }
   syncTarget(cx) {
     if (this.closed || !this.embedded) return;
@@ -111,7 +102,8 @@ export default class JecChat extends View {
     const old = this.target;
     const changed = (next?.terminal ?? null) !== old?.terminal || (next?.cwd ?? null) !== old?.cwd
       || (next?.pane ?? null) !== old?.pane || (next?.providerId ?? null) !== old?.providerId
-      || (next?.machine ?? null) !== old?.machine;
+      || (next?.machine ?? null) !== old?.machine
+      || (next?.tab ?? null) !== (old?.tab ?? null) || (next?.space ?? null) !== (old?.space ?? null);
     if (changed) {
       this.composer.blur(); this.bindDraft(null);
       this.target = next ?? emptyTarget();
@@ -128,8 +120,12 @@ export default class JecChat extends View {
     // Chat is reopened, re-identify the session rather than reuse a stale file.
     if (!changed && next && view === "jec-chat-view" && this.previousView !== "jec-chat-view") this.scan(cx);
     this.previousView = view;
-    // Another tab/agent was selected while Chat was active.
-    if (!next && view === "jec-chat-view") this.back();
+    // Automatic fallback must NOT forget the previous tab's preference.
+    // The visible pane header restores Chat when returning to a remembered tab.
+    if (!next && view === "jec-chat-view") {
+      this.composer.blur();
+      run("layout.select", { stack: "jec-view", child: "main" });
+    }
   }
   scan(cx, forcePicker = false) {
     const target = this.target, provider = this.provider;
@@ -314,7 +310,8 @@ export default class JecChat extends View {
     if (!this.embedded) return true;
     const live = embeddedTarget();
     return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane
-      && live?.providerId === target.providerId && live?.machine === target.machine;
+      && live?.providerId === target.providerId && live?.machine === target.machine
+      && live?.tab === target.tab && live?.space === target.space;
   }
   stop(cx) {
     if (this.closed || this.sending || this.interrupting || !allowsAction(this.target, this.provider, this.selected, this.registered, "interrupt")) return;
@@ -469,7 +466,9 @@ export default class JecChat extends View {
   render(cx) {
     const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
     const target = this.embedded && (valid?.terminal !== this.target?.terminal
-      || valid?.pane !== this.target?.pane) ? emptyTarget() : this.target;
+      || valid?.pane !== this.target?.pane || valid?.tab !== this.target?.tab
+      || valid?.space !== this.target?.space || valid?.providerId !== this.target?.providerId
+      || valid?.machine !== this.target?.machine) ? emptyTarget() : this.target;
     const canScan = Boolean(target.terminal && target.cwd);
     const canRead = canScan && Boolean(this.provider?.capabilities.history) && (!target.machine || this.provider.capabilities.remote);
     const name = providerName(target, this.provider);
@@ -477,7 +476,7 @@ export default class JecChat extends View {
       .bg(t.background).text_color(t.foreground).text_size(13)
       .when(this.embedded, el => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
       .child(this.header(t, target))
-      .when(Boolean(this.error), el => el.child(div().p(12).bg(t.raised).text_color(t.blocked)
+      .when(Boolean(target.terminal && this.error), el => el.child(div().p(12).bg(t.raised).text_color(t.blocked)
         .text_size(12).child(this.error)))
       .when(Boolean(target.machine) && !canRead, el => el.child(div().p(18).text_color(t.muted)
         .child("Este proveedor todavía no admite sesiones remotas. La terminal permanece intacta.")))

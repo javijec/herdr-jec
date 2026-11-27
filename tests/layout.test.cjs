@@ -35,7 +35,7 @@ test("mods JEC no se acoplan al nombre de la terminal ni anulan el layout base",
     assert.equal(mod.place, "none");
   }
   const pane = read("mods/jec-pane/main.js");
-  assert.match(pane, /setShared\("jec\.chat\.target"/);
+  assert.match(pane, /setShared\(VIEW_KEY, rememberChat/);
   assert.match(pane, /chatAvailable\(p\)/);
   assert.match(pane, /stack: "jec-view", child: "jec-chat-view"/);
   const chat = read("mods/jec-chat/main.js");
@@ -53,4 +53,37 @@ test("Chat embebido replica el marco y el encabezado compacto del pane original"
   assert.match(chat, /jec-choose-inline/);
   assert.match(chat, /jec-refresh-inline/);
   assert.match(pane, /this\.chatButton\(t, p\)/);
+});
+
+test("Chat view preferences are independent per tab and space", async () => {
+  const source = read("mods/jec-chat/view-state.js");
+  assert.equal(source,read("mods/jec-pane/view-state.js"));
+  const {activeTab,rememberChat,forgetChat,wantedPane,activeView} =
+    await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
+  const a={space:"s1",tab:"b1"}, b={space:"s1",tab:"b2"}, c={space:"s2",tab:"b3"};
+  const p1={pane:"p1",terminal:"t1",tab:"b1"}, p2={pane:"p2",terminal:"t2",tab:"b2"}, p3={pane:"p3",terminal:"t3",tab:"b3"};
+  const panes=[p1,p2,p3];
+  let saved=rememberChat(null,a,p1);
+  assert.equal(wantedPane(saved,a,panes),p1);
+  assert.equal(wantedPane(saved,b,panes),null);
+  saved=rememberChat(saved,b,p2);
+  assert.equal(wantedPane(saved,b,panes),p2);
+  assert.equal(wantedPane(saved,a,panes),p1);
+  saved=forgetChat(saved,b);
+  assert.equal(wantedPane(saved,b,panes),null);
+  assert.equal(wantedPane(saved,a,panes),p1);
+  saved=rememberChat(saved,c,p3);
+  assert.equal(wantedPane(saved,c,panes),p3);
+  assert.equal(wantedPane(saved,a,[{...p1,terminal:"replacement"}]),null);
+  assert.equal(wantedPane(saved,{...a,space:"other"},panes),null);
+  assert.equal(rememberChat(saved,b,p1),saved);
+  assert.deepEqual(activeTab([{id:"s1",active:false,tabs:[{id:"b1",active:true}]},{id:"s2",active:true,tabs:[{id:"b3",active:true}]}]),c);
+  assert.equal(activeView({id:"root",children:[{id:"jec-view",active:"main"}]}),"main");
+});
+test("explicit Terminal forgets only active tab; automatic fallback does not forget",()=>{
+  const chat=read("mods/jec-chat/main.js"), pane=read("mods/jec-pane/main.js");
+  assert.match(chat,/back\(\) \{[\s\S]*?forgetChat\(shared\(VIEW_KEY\), activeTab\(spaces\(\)\)\)/);
+  assert.doesNotMatch(chat,/if \(!next && view === "jec-chat-view"\) this\.back\(\)/);
+  assert.match(pane,/cx\.timer\.every\(250, \(\) => this\.restoreChat\(\)\)/);
+  assert.match(pane,/p\.terminal !== wanted\.terminal/);
 });

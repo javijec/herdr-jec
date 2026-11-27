@@ -2,7 +2,9 @@
 
 Mods propios para [Herdr Desktop](https://github.com/herdrdev/herdr-app), partiendo del layout original.
 
-## jec-chat v0.11 (Pi / Gentle Shell experimental)
+## jec-chat v0.11.1 (vista independiente por pestaña)
+
+Cada pestaña recuerda si se abrió Chat o Terminal. Al cambiar de pestaña o espacio se restaura la vista elegida; pulsar Terminal sólo modifica la pestaña activa. En pestañas con splits se recuerda un único pane Chat (el layout central sigue siendo compartido). Las preferencias son de la sesión de Herdr, no se promete persistencia tras reiniciar la aplicación.
 
 La v0.10 mantiene el adaptador común y añade recuperación automática de registro OpenCode, invalidación de acciones al cambiar la generación o el archivo de sesión, y envío habilitado sólo cuando OpenCode y Herdr confirman que está listo. Los borradores siguen en memoria por conversación; no se añade almacenamiento persistente.
 
