@@ -1,4 +1,4 @@
-# jec-chat v0.8 — alcance y contrato
+# jec-chat v0.9 — alcance y contrato
 
 Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la barra de tabs y el mod `agents`; agrega el layout personal `jec-chat` con un stack central para Chat/Terminal y el encabezado `jec-pane`.
 
@@ -22,9 +22,19 @@ Se instala sobre el Herdr base. Conserva intactos el layout original `main`, la 
 
 Las capacidades `history`, `discovery`, `send`, `interrupt`, `blockedPreview`, `approval` y `remote` controlan la exposición de acciones. La vista no importa implementaciones concretas. El adaptador Codex delega a los métodos de v0.7, conservando hooks, registro, historial y acciones. El selector manual de Codex queda disponible sólo para un agente no identificado y local; no se usa como fallback para un agente reconocido diferente.
 
-OpenCode y Pi/Gentle Shell están reconocidos en el catálogo, pero **no tienen todavía adaptadores activos**. Remotos y aprobaciones estructuradas tampoco están habilitados. Para incorporar un agente, primero implementar y probar su registro de identidad y lector, luego registrar el adaptador y habilitar sus capacidades. No reutilizar el lector ni la identidad de Codex.
+OpenCode v2 tiene un proveedor local experimental activo. Pi/Gentle Shell sigue reconocido sin adaptador. Remotos y aprobaciones estructuradas todavía no están habilitados. Para incorporar un agente, primero implementar y probar su registro de identidad y lector, luego registrar el adaptador y habilitar sus capacidades. No reutilizar el lector ni la identidad de Codex.
 
 La rama `stable/v0.7` preserva el estado validado antes de la refactorización.
+
+## OpenCode (v0.9)
+
+El plugin cliente `integrations/opencode/tui.ts` usa el contrato público v2 `context.ui.router.current()`, `context.data.session.get`, `message.list`, `status`, `permission.list` y `form.list`. Sólo captura la conversación principal visible, no otros eventos globales ni sesiones de la misma carpeta. Publica un archivo por `HC_TERMINAL_ID` en el directorio local de Herdr, con un identificador de generación y lease de 6,5 s. La publicación se hace por reemplazo de archivo, aproximadamente cada segundo. Si cambia la ruta a home, subagente o pantalla sin sesión, publica un estado pendiente sin historial.
+
+El adaptador `providers/opencode.js` verifica estado live, dirección local, versión del snapshot, frescura, generación e identificador de sesión. Antes de enviar, interrumpir o previsualizar el diálogo, vuelve a leer el snapshot y compara su identidad. El envío requiere estado idle de OpenCode e idle/done del core; se usa hc send sin force y la protección nativa contra blocked. La comprobación y envío no son atómicos respecto a cambios concurrentes de ruta, especialmente en done donde no existe --if done. No reintenta automáticamente. Detener exige que ambos informen working. El diálogo es una vista previa sin teclas de aprobación.
+
+El adaptador declara discovery=false: no hay selector manual ni búsqueda de sesiones. La vista espera el registro activo y se actualiza automáticamente. La identidad se pierde si el plugin deja de publicar. El historial es una copia efímera de texto visible, no se escribe a la base de datos de OpenCode; el plugin limpia su archivo en una desactivación normal, y los archivos vencidos tras un cierre abrupto no se usan.
+
+Referencias oficiales: [contrato de plugins](https://github.com/anomalyco/opencode/blob/dev/packages/cli-rs/docs/plugins.md), [contexto TUI](https://github.com/anomalyco/opencode/blob/dev/packages/plugin/src/tui/context.ts), [esquema de mensajes](https://github.com/anomalyco/opencode/blob/dev/packages/schema/src/session-message.ts).
 
 ## Flujo
 
