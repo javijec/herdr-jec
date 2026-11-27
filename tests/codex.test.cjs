@@ -43,6 +43,8 @@ test("lee la sesion de la carpeta y no mezcla conversaciones", async () => {
     try {
       const result = await main(["read", "--cwd", cwd, "--file", good]);
       assert.equal(result.ok, true);
+      assert.equal((await main(["read", "--cwd", cwd, "--file", good, "--id", "session-one"])).id, "session-one");
+      await assert.rejects(() => main(["read", "--cwd", cwd, "--file", good, "--id", "session-two"]), /UUID/);
       await assert.rejects(
         () => main(["read", "--cwd", other, "--file", good]),
         /no coincide/
