@@ -64,7 +64,7 @@ test("install preserves existing hooks and is idempotent", () => {
     assert.equal(count, 1);
   }
   assert.equal(merge(old, "node hook.cjs"), false);
-  assert.equal(commandFor("C:\\Users\\Example Name\\hook.cjs", "win32"), 'node "C:/Users/Example Name/hook.cjs"');
+  assert.equal(commandFor("C:\\Users\\Example Name\\hook.cjs", "win32", "C:\\Program Files\\nodejs\\node.exe"), '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\Example Name\\hook.cjs"');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "jec-hooks-"));
   try {
     const target = path.join(home, "hooks.json");
@@ -95,4 +95,17 @@ test("hook reports a missing terminal environment and failed label without stori
   const good = {};
   assert.equal(apply(input, env, () => "", good), true);
   assert.equal(good.reason, "registered");
+});
+
+test("migration replaces only the exact legacy JEC hook and does not duplicate it", () => {
+  const oldCommand = 'node "C:/Example/hook.cjs"';
+  const newCommand = '"C:\\Program Files\\nodejs\\node.exe" "C:\\Example\\hook.cjs"';
+  const config = { hooks: { Stop: [{ hooks: [
+    {type:"command",command:oldCommand,timeout:5},
+    {type:"command",command:"unrelated"}
+  ] }] } };
+  assert.equal(merge(config,newCommand,oldCommand),true);
+  assert.deepEqual(config.hooks.Stop[0].hooks.map(h=>h.command),[newCommand,"unrelated"]);
+  assert.equal(config.hooks.Stop.length,1);
+  assert.equal(merge(config,newCommand,oldCommand),false);
 });
