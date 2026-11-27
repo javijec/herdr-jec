@@ -36,7 +36,7 @@ test("mods JEC no se acoplan al nombre de la terminal ni anulan el layout base",
   }
   const pane = read("mods/jec-pane/main.js");
   assert.match(pane, /setShared\("jec\.chat\.target"/);
-  assert.match(pane, /localCodex\(p\)/);
+  assert.match(pane, /chatAvailable\(p\)/);
   assert.match(pane, /stack: "jec-view", child: "jec-chat-view"/);
   const chat = read("mods/jec-chat/main.js");
   assert.match(chat, /stack: "jec-view", child: "main"/);
