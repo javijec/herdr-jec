@@ -1,15 +1,15 @@
-import { View, div } from "gpui-kit";
+import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
 import { listSessions, readSession, resolveCurrentSession } from "./providers/codex.js";
 
-function button(t, id, label, onClick, active = false) {
-  return div().id(id).h(31).flex_none().px(11).rounded(7)
+function button(t, id, label, onClick, active = false, compact = false) {
+  return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
     .bg(active ? t.selected : t.raised).border_1().border_color(t.border)
-    .text_color(t.foreground).text_size(12).flex().items_center()
+    .text_color(t.foreground).text_size(compact ? 11 : 12).flex().items_center()
     .cursor_pointer().hover(el => el.bg(t.hover))
-    .on_click((_e, cx) => onClick(cx)).child(label);
+    .on_click((_e, cx) => { cx.stop_propagation(); onClick(cx); }).child(label);
 }
 
 // Layout-owned chat: the pane header supplies the exact terminal identity.
@@ -132,7 +132,10 @@ export default class JecChat extends View {
   }
   sessionPicker(t) {
     return v_flex().gap(8).p(14)
-      .child(div().font_semibold().text_size(16).child("Elegí la sesión correcta"))
+      .child(h_flex().items_center().gap(8)
+        .child(div().font_semibold().text_size(this.embedded ? 13 : 16).child("Elegí la sesión correcta"))
+        .child(div().flex_1())
+        .when(this.embedded, el => el.child(button(t, "jec-retry", "Actualizar", cx => this.scan(cx), false, true))))
       .child(div().text_color(t.muted).text_size(12).child(
         "No pudimos confirmar qué sesión está abierta en esta terminal. Elegí la correcta; nunca seleccionamos por fecha."))
       .children(this.sessions.map((s, i) =>
@@ -162,6 +165,39 @@ export default class JecChat extends View {
           : TextView.markdown("jec-message-" + i, m.text).raw_html(false).selectable(true).w_full()))
       .when(!mine, el => el.child(div().flex_1()));
   }
+  // Use the same 30 px pane header, name, icon, path and chrome as Herdr's
+  // terminal pane. The embedded chat is a view, not a new application shell.
+  header(t, target) {
+    const pane = this.embedded ? panes().find(p => p.pane === target.pane) : null;
+    const program = pane?.program;
+    const pic = program?.icon
+      ? (program.tint ? svg(program.icon).size(14).flex_none().text_color(t.dim)
+        : image(program.icon).w(14).h(14).flex_none()) : null;
+    const name = this.embedded
+      ? pane?.name || ((program?.agent || program?.shell) && program.name) || pane?.title || program?.name || "Codex"
+      : "JEC Chat";
+    const cwd = this.embedded ? (target.cwd || "")
+      : [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ");
+    return h_flex().h(this.embedded ? 30 : 53).flex_none()
+      .px(this.embedded ? 10 : 16).gap(8).items_center()
+      .bg(t.background).border_b(1).border_color(t.border)
+      .when(Boolean(pic), el => el.child(pic))
+      .child(div().flex_none().font_medium().text_size(this.embedded ? 12 : 15)
+        .max_w(this.embedded ? 170 : 240).truncate().child(name))
+      .child(div().flex_1().min_w(0).truncate().text_color(t.dim)
+        .text_size(this.embedded ? 12 : 11).child(cwd))
+      .child(button(t, "jec-terminal", this.embedded ? "Terminal" : "← Terminal", () => this.back(), false, this.embedded))
+      .when(!this.embedded && Boolean(this.selected), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => this.resetChoice(cx))))
+      .when(!this.embedded, el => el.child(button(t, "jec-refresh", "Actualizar", cx => {
+        if (this.selected) this.refresh(cx);
+        else this.scan(cx);
+      })));
+  }
+  resetChoice(cx) {
+    this.selected = null; this.messages = []; this.readSeq++;
+    this.reading = false; this.error = null; this.matchMethod = null;
+    cx.notify();
+  }
   render(cx) {
     const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
     const target = this.embedded && (valid?.terminal !== this.target?.terminal
@@ -170,18 +206,8 @@ export default class JecChat extends View {
     const canRead = canScan && (target.isCodex || this.manual);
     return v_flex().id("jec-chat-root").w_full().h_full().min_h(0)
       .bg(t.background).text_color(t.foreground).text_size(13)
-      .child(h_flex().h(53).flex_none().px(16).gap(10).items_center()
-        .border_b(1).border_color(t.border)
-        .child(div().font_semibold().text_size(17).child("JEC Chat"))
-        .child(div().text_color(t.muted).text_size(11).truncate().flex_1().child(
-          [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ")))
-        .child(button(t, "jec-terminal", this.embedded ? "Terminal" : "← Terminal", () => this.back()))
-        .when(Boolean(this.selected), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => {
-          this.selected = null; this.messages = []; this.readSeq++; this.reading = false; this.error = null; this.matchMethod = null; cx.notify();
-        })))
-        .child(button(t, "jec-refresh", "Actualizar", cx => {
-          if (this.selected) this.refresh(cx); else if (canRead) this.scan(cx);
-        })))
+      .when(this.embedded, el => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
+      .child(this.header(t, target))
       .when(Boolean(this.error), el => el.child(div().p(12).bg(t.raised).text_color(t.blocked)
         .text_size(12).child(this.error)))
       .when(Boolean(target.machine), el => el.child(div().p(18).text_color(t.muted)
@@ -201,20 +227,29 @@ export default class JecChat extends View {
           "No se encontraron sesiones de Codex en esta carpeta. Iniciá Codex en la terminal y volvé a actualizar.")))
       .when(canRead && Boolean(this.selected), el =>
         el.child(v_flex().flex_1().min_h(0)
-          .child(h_flex().h(35).px(16).flex_none().items_center().gap(10)
-            .child(div().font_semibold().text_size(11).child(this.selected.id.slice(0, 16)))
+          .child(h_flex().h(this.embedded ? 29 : 35).px(this.embedded ? 12 : 16)
+            .flex_none().items_center().gap(9)
+            .child(div().font_semibold().text_size(11).truncate().max_w(160)
+              .child(this.selected.id.slice(0, 16)))
             .child(div().text_size(11).text_color(t.muted).child(
               this.reading ? "Actualizando…" : this.total + " eventos"))
-            .when(Boolean(this.matchMethod), el => el.child(div().text_size(11).text_color(t.accent)
-              .child("Detectada: " + this.matchMethod)))
-            .when(this.stale, el => el.child(div().text_size(11).text_color(t.dim).child("Últimos mensajes"))))
+            .when(Boolean(this.matchMethod), el => el.child(div().text_size(11).text_color(t.dim)
+              .truncate().child("· " + this.matchMethod)))
+            .when(this.stale, el => el.child(div().text_size(11).text_color(t.dim).child("Últimos mensajes")))
+            .child(div().flex_1().min_w(0))
+            .when(this.embedded, el => el
+              .child(button(t, "jec-choose-inline", "Sesión", cx => this.resetChoice(cx), false, true))
+              .child(button(t, "jec-refresh-inline", "↻", cx => this.refresh(cx), false, true))))
           .child(v_flex().id("jec-chat-scroll").flex_1().min_h(0).overflow_y_scrollbar()
             .track_scroll(this.scroll).p(12).gap(10)
             .children(this.messages.map((m, i) => this.message(t, m, i)))
             .when(!this.messages.length, el => el.child(div().p(12).text_color(t.muted)
               .child(this.reading ? "Cargando mensajes…" : "Esta sesión no tiene mensajes legibles."))))
-          .child(div().flex_none().border_t(1).border_color(t.border).p(11)
-            .text_size(11).text_color(t.muted)
-            .child("Solo lectura · Para escribir o aprobar acciones, elegí Terminal. La sesión sigue ejecutándose."))));
+          .child(div().flex_none().h(this.embedded ? 27 : 39)
+            .border_t(1).border_color(t.border).px(12).flex().items_center()
+            .text_size(11).text_color(t.muted).truncate()
+            .child(this.embedded
+              ? "Solo lectura · Para escribir o aprobar acciones, elegí Terminal"
+              : "Solo lectura · Para escribir o aprobar acciones, elegí Terminal. La sesión sigue ejecutándose."))));
   }
 }
