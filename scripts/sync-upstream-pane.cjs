@@ -3,12 +3,14 @@
 // No network access or implicit upgrade; update pinned snapshots explicitly.
 const fs=require("node:fs"),path=require("node:path");
 const root=path.resolve(__dirname,"..");
-const read=p=>fs.readFileSync(path.join(root,p),"utf8");
+const normalize=s=>s.replace(/\r\n/g,"\n");
+const read=p=>normalize(fs.readFileSync(path.join(root,p),"utf8"));
 function once(s,a,b){
   if(s.indexOf(a)<0 || s.indexOf(a)!==s.lastIndexOf(a)) throw Error("Upstream anchor changed: "+a);
   return s.replace(a,b);
 }
 function deriveHeader(source){
+  source=normalize(source);
   let s=once(source,'import { View, div, svg, image } from "gpui-kit";','import { div, svg, image } from "gpui-kit";');
   s=once(s,'import { panes, props, run, theme, home, layout } from "herdr";','import { panes, props, run, theme, home, layout } from "herdr";\nimport { showChatToggle, chatToggle } from "./chat-toggle.js";');
   s=once(s,'export default class Pane extends View {\n  init() { this.hovered = false; }','export class PaneHeader {\n  constructor() { this.hovered = false; }');
@@ -16,6 +18,7 @@ function deriveHeader(source){
   return "// Based on herdrdev/herdr-app defaults/mods/pane/main.js @ 1180a5cec3b8bd4dfebf4a9b217ab8cb59a96ffa\n// Modified for JEC: header role and one Chat/Terminal action. See native/upstream/LICENSE.\n"+s;
 }
 function deriveLayout(source){
+  source=normalize(source);
   return once(source,'"mod": "pane"','"mod": "jec-chat-native",\n                      "props": {\n                        "paneHeader": true\n                      }');
 }
 if(require.main===module){

@@ -1,6 +1,6 @@
 "use strict";
 const test=require("node:test"), assert=require("node:assert/strict"), fs=require("node:fs"), path=require("node:path");
-const read=p=>fs.readFileSync(path.join(__dirname,"..",p),"utf8");
+const read=p=>fs.readFileSync(path.join(__dirname,"..",p),"utf8").replace(/\r\n/g,"\n");
 const url=s=>"data:text/javascript;charset=utf-8,"+encodeURIComponent(s);
 async function helpers(){
   const cat=url(read("mods/jec-chat/provider-catalog.js"));
@@ -66,4 +66,11 @@ test("official pane and main layout are the reproducible base; only JEC extensio
  const stock=JSON.parse(read("native/upstream/main.json")), custom=JSON.parse(read("layouts/jec-chat-native.json"));
  find(custom,"main").content.pane.header.content={mod:"pane"};
  assert.deepEqual(custom,stock);
+});
+
+test("official generation also accepts Windows CRLF snapshots",()=>{
+ const {deriveHeader,deriveLayout}=require("../scripts/sync-upstream-pane.cjs");
+ for(const [p,derive] of [["native/upstream/pane.js",deriveHeader],["native/upstream/main.json",deriveLayout]]){
+  const source=read(p); assert.equal(derive(source.replace(/\n/g,"\r\n")),derive(source));
+ }
 });
