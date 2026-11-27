@@ -1,6 +1,6 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle } from "gpui-base";
-import { focused, panes, spaces, terminals, props, theme, closeOverlay, window as appWindow } from "herdr";
+import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
 import { listSessions, readSession } from "./providers/codex.js";
 
@@ -12,9 +12,39 @@ function button(t, id, label, onClick, active = false) {
     .on_click((_e, cx) => onClick(cx)).child(label);
 }
 
+// Layout-owned chat: the pane header supplies the exact terminal identity.
+// Recheck it before every view change so switching Spaces/Tabs cannot show
+// an unrelated Codex conversation from another terminal in the same folder.
+function embeddedTarget() {
+  const wanted = shared("jec.chat.target");
+  if (!wanted?.terminal || !wanted?.pane || !wanted?.tab) return null;
+  const currentSpace = spaces().find(space => space.active);
+  const activeTab = currentSpace?.tabs?.find(tab => tab.active)?.id;
+  if (!activeTab || wanted.tab !== activeTab || currentSpace.machine) return null;
+  const p = panes().find(p => p.pane === wanted.pane && p.terminal === wanted.terminal && p.tab === wanted.tab);
+  if (!p) return null;
+  const candidate = resolveTarget({
+    focus: { pane: p.pane, terminal: p.terminal, space: currentSpace.id },
+    allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
+  });
+  return candidate.isCodex && candidate.terminal === wanted.terminal
+    ? { ...candidate, tab: p.tab } : null;
+}
+function activeView(tree) {
+  if (!tree) return null;
+  if (tree.id === "jec-view") return tree.active;
+  for (const child of tree.children ?? []) {
+    const found = activeView(child);
+    if (found) return found;
+  }
+  return null;
+}
+const emptyTarget = () => ({ terminal: null, pane: null, cwd: null, machine: null, isCodex: false });
+
 export default class JecChat extends View {
   init(_props, cx) {
-    this.target = resolveTarget({
+    this.embedded = props()?.embedded === true;
+    this.target = this.embedded ? (embeddedTarget() ?? emptyTarget()) : resolveTarget({
       focus: focused(), allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
     });
     this.sessions = []; this.selected = null; this.messages = []; this.total = 0;
@@ -23,12 +53,35 @@ export default class JecChat extends View {
     this.scroll = ScrollHandle.new();
     this.closed = false; this.seq = 0; this.readSeq = 0;
     if (this.target.terminal && this.target.cwd && !this.target.machine && this.target.isCodex) this.scan(cx);
+    if (this.embedded) cx.timer.every(400, cx => this.syncTarget(cx));
     cx.timer.every(4000, (cx) => {
-      if (!this.closed && this.selected && !this.reading && appWindow()?.visible !== false) this.refresh(cx);
+      if (!this.closed && this.selected && !this.reading && appWindow()?.visible !== false
+          && (!this.embedded || activeView(layout()) === "jec-chat-view")) this.refresh(cx);
     });
   }
   close() { this.closed = true; this.seq++; this.readSeq++; }
-  back() { closeOverlay(props()?.overlay); }
+  back() {
+    if (this.embedded) run("layout.select", { stack: "jec-view", child: "main" });
+    else closeOverlay(props()?.overlay);
+  }
+  syncTarget(cx) {
+    if (this.closed || !this.embedded) return;
+    const next = embeddedTarget();
+    const old = this.target;
+    const changed = (next?.terminal ?? null) !== old?.terminal || (next?.cwd ?? null) !== old?.cwd
+      || (next?.pane ?? null) !== old?.pane;
+    if (changed) {
+      this.target = next ?? emptyTarget();
+      this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
+      this.manual = false; this.error = null; this.loading = false; this.reading = false;
+      this.seq++; this.readSeq++; this.more = false; this.stale = false;
+      if (next?.isCodex && next.cwd) this.scan(cx);
+      cx.notify();
+    }
+    // Another tab/agent was selected while the Chat half of the stack
+    // was active: leave it instead of displaying the old terminal's transcript.
+    if (!next && activeView(layout()) === "jec-chat-view") this.back();
+  }
   scan(cx) {
     if (this.loading || !this.target.cwd || this.target.machine) return;
     this.loading = true; this.error = null; this.selected = null;
@@ -97,7 +150,9 @@ export default class JecChat extends View {
       .when(!mine, el => el.child(div().flex_1()));
   }
   render(cx) {
-    const t = theme(), target = this.target;
+    const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
+    const target = this.embedded && (valid?.terminal !== this.target?.terminal
+      || valid?.pane !== this.target?.pane) ? emptyTarget() : this.target;
     const canScan = Boolean(target.terminal && target.cwd && !target.machine);
     const canRead = canScan && (target.isCodex || this.manual);
     return v_flex().id("jec-chat-root").w_full().h_full().min_h(0)
@@ -107,7 +162,7 @@ export default class JecChat extends View {
         .child(div().font_semibold().text_size(17).child("JEC Chat"))
         .child(div().text_color(t.muted).text_size(11).truncate().flex_1().child(
           [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ")))
-        .child(button(t, "jec-terminal", "← Terminal", () => this.back()))
+        .child(button(t, "jec-terminal", this.embedded ? "Terminal" : "← Terminal", () => this.back()))
         .when(Boolean(this.selected), el => el.child(button(t, "jec-choose", "Cambiar sesión", cx => {
           this.selected = null; this.messages = []; this.readSeq++; this.reading = false; this.error = null; cx.notify();
         })))
@@ -145,6 +200,6 @@ export default class JecChat extends View {
               .child(this.reading ? "Cargando mensajes…" : "Esta sesión no tiene mensajes legibles."))))
           .child(div().flex_none().border_t(1).border_color(t.border).p(11)
             .text_size(11).text_color(t.muted)
-            .child("Solo lectura · Para escribir o aprobar acciones, usá ← Terminal. La sesión sigue ejecutándose."))));
+            .child("Solo lectura · Para escribir o aprobar acciones, elegí Terminal. La sesión sigue ejecutándose."))));
   }
 }
