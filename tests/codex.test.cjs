@@ -58,14 +58,14 @@ test("oculta el contexto tecnico sin borrar prompts reales", async () => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "jec-codex-context-"));
   try {
     const file = path.join(tmp, "rollout-context.jsonl");
-    const context = "<environment_context>\\n<cwd>C:\\\\proyecto</cwd>\\n<shell>powershell</shell>\\n</environment_context>";
+    const context = "<environment_context>\n<cwd>C:\\\\proyecto</cwd>\n<shell>powershell</shell>\n</environment_context>";
     const lines = [
       { type: "event_msg", payload: { type: "user_message", message: context } },
-      { type: "event_msg", payload: { type: "user_message", message: context + "\\nHola, Codex" } },
+      { type: "event_msg", payload: { type: "user_message", message: context + "\nHola, Codex" } },
       { type: "event_msg", payload: { type: "user_message", message: "Explicá la etiqueta <environment_context> sin ocultarla" } },
       { type: "response_item", payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "Hola" }] } },
     ];
-    await fs.writeFile(file, lines.map(x => JSON.stringify(x)).join("\\n") + "\\n");
+    await fs.writeFile(file, lines.map(x => JSON.stringify(x)).join("\n") + "\n");
     const t = await transcript(file);
     assert.deepEqual(t.messages.map(x => x.text), [
       "Hola, Codex", "Explicá la etiqueta <environment_context> sin ocultarla", "Hola"
@@ -77,7 +77,7 @@ test("oculta el contexto tecnico sin borrar prompts reales", async () => {
       { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: context }] } },
       { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Mensaje real" }] } },
     ];
-    await fs.writeFile(itemFile, items.map(x => JSON.stringify(x)).join("\\n") + "\\n");
+    await fs.writeFile(itemFile, items.map(x => JSON.stringify(x)).join("\n") + "\n");
     const itemsTranscript = await transcript(itemFile);
     assert.deepEqual(itemsTranscript.messages.map(x => x.text), ["Mensaje real"]);
   } finally {
