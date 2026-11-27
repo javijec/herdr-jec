@@ -2,7 +2,8 @@ import { View, div, svg, image } from "gpui-kit";
 import { v_flex, h_flex, TextView, ScrollHandle, TextareaState, Textarea } from "gpui-base";
 import { focused, panes, spaces, terminals, props, theme, closeOverlay, shared, run, layout, window as appWindow } from "herdr";
 import { resolveTarget, shortDate } from "./session.js";
-import { listSessions, readSession, resolveCurrentSession, registeredSession, sendPrompt, terminalStatus, interruptPrompt, blockedScreen } from "./providers/codex.js";
+import { providerFor, providerName, sessionKey, allowsAction } from "./providers/index.js";
+import { supportsChat } from "./provider-catalog.js";
 
 function button(t, id, label, onClick, active = false, compact = false) {
   return div().id(id).h(compact ? 23 : 31).flex_none().px(compact ? 9 : 11).rounded(compact ? 5 : 7)
@@ -20,14 +21,14 @@ function embeddedTarget() {
   if (!wanted?.terminal || !wanted?.pane || !wanted?.tab) return null;
   const currentSpace = spaces().find(space => space.active);
   const activeTab = currentSpace?.tabs?.find(tab => tab.active)?.id;
-  if (!activeTab || wanted.tab !== activeTab || currentSpace.machine) return null;
+  if (!activeTab || wanted.tab !== activeTab) return null;
   const p = panes().find(p => p.pane === wanted.pane && p.terminal === wanted.terminal && p.tab === wanted.tab);
   if (!p) return null;
   const candidate = resolveTarget({
     focus: { pane: p.pane, terminal: p.terminal, space: currentSpace.id },
     allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
   });
-  return candidate.isCodex && candidate.terminal === wanted.terminal
+  return supportsChat(candidate) && candidate.terminal === wanted.terminal
     ? { ...candidate, tab: p.tab } : null;
 }
 function activeView(tree) {
@@ -39,7 +40,7 @@ function activeView(tree) {
   }
   return null;
 }
-const emptyTarget = () => ({ terminal: null, pane: null, cwd: null, machine: null, isCodex: false });
+const emptyTarget = () => ({ terminal: null, pane: null, cwd: null, machine: null, providerId: null });
 
 export default class JecChat extends View {
   init(_props, cx) {
@@ -47,6 +48,7 @@ export default class JecChat extends View {
     this.target = this.embedded ? (embeddedTarget() ?? emptyTarget()) : resolveTarget({
       focus: focused(), allPanes: panes(), allSpaces: spaces(), allTerminals: terminals(),
     });
+    this.provider = providerFor(this.target);
     this.sessions = []; this.selected = null; this.messages = []; this.total = 0;
     this.loading = false; this.reading = false; this.error = null;
     this.matchMethod = null; this.previousView = this.embedded ? activeView(layout()) : null;
@@ -54,7 +56,7 @@ export default class JecChat extends View {
     this.registered = false; this.pendingRegistration = null;
     this.coreStatus = null;
     this.scroll = ScrollHandle.new();
-    this.composer = TextareaState.new({ placeholder: "Escribí un mensaje a Codex…", rows: 3 });
+    this.composer = TextareaState.new({ placeholder: "Escribí un mensaje…", rows: 3 });
     this.draftKey = null; this.drafts = new Map();
     this.draft = ""; this.sending = false; this.sendError = null; this.sendNotice = null;
     this.waitingFor = null; this.interrupting = false;
@@ -71,7 +73,7 @@ export default class JecChat extends View {
     // Older bridge versions without these flags keep the button as fallback.
     this.composer.on("submit", (e, cx) => {
       if (e?.shift !== false || e?.secondary === true) return;
-      if (this.closed || this.sending || this.interrupting || !this.registered || !this.selected) return;
+      if (this.closed || this.sending || this.interrupting || !allowsAction(this.target, this.provider, this.selected, this.registered, "interrupt")) return;
       if (["working", "blocked"].includes(this.agentState())) return;
       // The underlying textarea inserts a newline before emitting submit.
       // Remove only that newline at the current caret, not existing lines.
@@ -86,7 +88,7 @@ export default class JecChat extends View {
       if (this.composer.value().trim()) this.send(cx);
     });
     this.closed = false; this.seq = 0; this.readSeq = 0;
-    if (this.target.terminal && this.target.cwd && !this.target.machine && this.target.isCodex) this.scan(cx);
+    if (this.provider) this.scan(cx);
     if (this.embedded) cx.timer.every(400, cx => this.syncTarget(cx));
     cx.timer.every(1000, (cx) => {
       if (this.closed || (!this.selected && !this.pendingRegistration) || this.reading || this.loading || appWindow()?.visible === false
@@ -108,15 +110,17 @@ export default class JecChat extends View {
     const next = embeddedTarget();
     const old = this.target;
     const changed = (next?.terminal ?? null) !== old?.terminal || (next?.cwd ?? null) !== old?.cwd
-      || (next?.pane ?? null) !== old?.pane;
+      || (next?.pane ?? null) !== old?.pane || (next?.providerId ?? null) !== old?.providerId
+      || (next?.machine ?? null) !== old?.machine;
     if (changed) {
       this.composer.blur(); this.bindDraft(null);
       this.target = next ?? emptyTarget();
+      this.provider = providerFor(this.target);
       this.selected = null; this.sessions = []; this.messages = []; this.total = 0;
       this.manual = false; this.error = null; this.loading = false; this.reading = false;
       this.seq++; this.readSeq++; this.more = false; this.stale = false; this.matchMethod = null;
       this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
-      if (next?.isCodex && next.cwd) this.scan(cx);
+      if (this.provider) this.scan(cx);
       cx.notify();
     }
     const view = activeView(layout());
@@ -128,23 +132,25 @@ export default class JecChat extends View {
     if (!next && view === "jec-chat-view") this.back();
   }
   scan(cx, forcePicker = false) {
-    if (this.loading || !this.target.cwd || this.target.machine) return;
+    const target = this.target, provider = this.provider;
+    if (this.loading || !provider?.capabilities.history || !target.cwd || (target.machine && !provider.capabilities.remote)) return;
     this.loading = true; this.error = null; this.selected = null;
     this.matchMethod = null; this.registered = false; this.pendingRegistration = null; this.coreStatus = null;
     this.messages = []; this.total = 0; this.readSeq++; this.reading = false;
     const seq = ++this.seq;
     cx.spawn(async cx => {
       try {
-        if (!forcePicker && this.target.isCodex && this.target.terminal) {
-          const direct = await registeredSession(this.target.cwd, this.target.terminal);
+        if (!forcePicker && target.providerId === provider.id && target.terminal) {
+          const direct = await provider.identify(target);
           if (seq !== this.seq || this.closed) return;
           if (direct) { this.acceptRegistration(direct); return; }
         }
-        const result = await listSessions(this.target.cwd);
+        if (!provider.capabilities.discovery) return;
+        const result = await provider.list(target);
         if (seq !== this.seq || this.closed) return;
         this.sessions = result.sessions ?? []; this.more = Boolean(result.limited || result.total > this.sessions.length);
-        if (!forcePicker && this.sessions.length && this.target.isCodex && this.target.terminal) {
-          const match = await resolveCurrentSession(this.target.cwd, this.target.terminal, this.sessions);
+        if (!forcePicker && this.sessions.length && target.providerId === provider.id && target.terminal) {
+          const match = await provider.match(target, this.sessions);
           if (seq !== this.seq || this.closed) return;
           if (match?.session) {
             this.matchMethod = match.method;
@@ -161,8 +167,8 @@ export default class JecChat extends View {
     this.pendingRegistration = direct.pending ? direct.id : null;
     this.sessions = []; this.more = false;
     this.selected = direct.session ?? null;
-    this.bindDraft(this.selected ? this.target.terminal + "/" + this.selected.id : null);
-    this.matchMethod = direct.method ?? "registro Codex";
+    this.bindDraft(sessionKey(this.target, this.provider, this.selected));
+    this.matchMethod = direct.method ?? "registro " + providerName(this.target, this.provider);
     const messages = direct.data?.messages ?? [];
     const total = direct.data?.total ?? messages.length;
     const last = messages[messages.length - 1], previous = this.messages[this.messages.length - 1];
@@ -192,11 +198,12 @@ export default class JecChat extends View {
     if ((!this.selected && !this.pendingRegistration) || this.reading || this.closed) return;
     if (this.registered) { this.refreshRegistered(cx); return; }
     this.reading = true;
-    const file = this.selected.file, seq = this.seq, readSeq = ++this.readSeq;
+    const session = this.selected, target = this.target, provider = this.provider;
+    const seq = this.seq, readSeq = ++this.readSeq;
     cx.spawn(async cx => {
       try {
-        const result = await readSession(this.target.cwd, file);
-        if (this.closed || seq !== this.seq || readSeq !== this.readSeq || this.selected?.file !== file) return;
+        const result = await provider.read(target, session);
+        if (this.closed || seq !== this.seq || readSeq !== this.readSeq || this.selected?.id !== session.id) return;
         this.messages = result.messages ?? []; this.total = result.total ?? this.messages.length;
         this.stale = Boolean(result.truncated); this.error = null;
         this.scroll.scroll_to_item(Math.max(0, this.messages.length - 1));
@@ -207,10 +214,10 @@ export default class JecChat extends View {
   refreshRegistered(cx) {
     this.reading = true;
     const seq = this.seq, readSeq = ++this.readSeq;
-    const target = this.target;
+    const target = this.target, provider = this.provider;
     cx.spawn(async cx => {
       try {
-        const direct = await registeredSession(target.cwd, target.terminal);
+        const direct = await provider.identify(target);
         if (this.closed || seq !== this.seq || readSeq !== this.readSeq) return;
         if (direct) this.acceptRegistration(direct);
         else {
@@ -235,27 +242,23 @@ export default class JecChat extends View {
     this.sendError = null; this.sendNotice = null; this.waitingFor = null; this.dialog = null;
   }
   agentState(target = this.target) {
-    return this.coreStatus ?? terminalStatus(terminals().find(x => x.address === target?.terminal));
+    return this.coreStatus ?? this.provider?.status(terminals().find(x => x.address === target?.terminal)) ?? null;
   }
   send(cx) {
-    if (this.closed || this.sending || this.interrupting || this.loading || !this.registered || !this.selected) return;
-    const target = this.target, session = this.selected, key = this.draftKey, seq = this.seq;
+    if (this.closed || this.sending || this.interrupting || this.loading || !allowsAction(this.target, this.provider, this.selected, this.registered, "send")) return;
+    const target = this.target, provider = this.provider, session = this.selected, key = this.draftKey, seq = this.seq;
     const prompt = this.composer.value(), baseline = this.total;
     if (!key || !prompt.trim()) {
       this.sendError = "Escribí un mensaje antes de enviar."; cx.notify(); return;
     }
     const current = () => {
-      if (this.closed || this.seq !== seq || this.draftKey !== key || !this.registered
-          || this.selected?.id !== session.id || this.target?.terminal !== target.terminal) return false;
-      if (!this.embedded) return true;
-      const live = embeddedTarget();
-      return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane;
+      return this.provider === provider && this.draftKey === key && this.currentAction(target, session, seq);
     };
     if (!current()) { this.sendError = "El panel cambió. Volvé a abrir Chat."; cx.notify(); return; }
     this.sending = true; this.sendError = null; this.sendNotice = null; cx.notify();
     cx.spawn(async cx => {
       try {
-        const sent = await sendPrompt(target, session, prompt, current);
+        const sent = await provider.send(target, session, prompt, current);
         // Never erase edits or another session's draft made during the send.
         if (this.drafts.get(key) === prompt) this.drafts.delete(key);
         if (current()) {
@@ -279,20 +282,22 @@ export default class JecChat extends View {
   }
   currentAction(target, session, seq) {
     if (this.closed || this.seq !== seq || !this.registered || this.selected?.id !== session.id
-        || this.target?.terminal !== target.terminal) return false;
+        || this.target?.terminal !== target.terminal || this.target?.providerId !== target.providerId
+        || this.target?.machine !== target.machine) return false;
     if (!this.embedded) return true;
     const live = embeddedTarget();
-    return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane;
+    return activeView(layout()) === "jec-chat-view" && live?.terminal === target.terminal && live?.pane === target.pane
+      && live?.providerId === target.providerId && live?.machine === target.machine;
   }
   stop(cx) {
     if (this.closed || this.sending || this.interrupting || !this.registered || !this.selected) return;
-    const target = this.target, session = this.selected, seq = this.seq;
+    const target = this.target, provider = this.provider, session = this.selected, seq = this.seq;
     const current = () => this.currentAction(target, session, seq);
     if (!current()) return;
     this.interrupting = true; this.sendError = null; this.sendNotice = null; this.waitingFor = null; cx.notify();
     cx.spawn(async cx => {
       try {
-        await interruptPrompt(target, session, current);
+        await provider.interrupt(target, session, current);
       } catch (e) { if (current()) this.sendError = String(e?.message ?? e); }
       finally {
         this.interrupting = false;
@@ -302,14 +307,14 @@ export default class JecChat extends View {
     });
   }
   inspectDialog(cx) {
-    if (this.dialogLoading || !this.registered || !this.selected || this.closed) return;
-    const target = this.target, session = this.selected, seq = this.seq;
+    if (this.dialogLoading || this.closed || !allowsAction(this.target, this.provider, this.selected, this.registered, "blockedPreview")) return;
+    const target = this.target, provider = this.provider, session = this.selected, seq = this.seq;
     const current = () => this.currentAction(target, session, seq);
     if (!current()) return;
     this.dialogLoading = true; this.sendError = null; cx.notify();
     cx.spawn(async cx => {
       try {
-        const screen = await blockedScreen(target, session);
+        const screen = await provider.blockedPreview(target, session);
         if (current()) this.dialog = screen || null;
       } catch (e) { if (current()) this.sendError = String(e?.message ?? e); }
       finally {
@@ -320,25 +325,25 @@ export default class JecChat extends View {
     });
   }
   composerView(t, target) {
-    if (!this.registered || !this.selected) {
+    if (!allowsAction(target, this.provider, this.selected, this.registered, "send")) {
       return div().flex_none().h(27).border_t(1).border_color(t.border).px(12)
         .flex().items_center().text_size(11).text_color(t.muted).truncate()
-        .child("Solo lectura · vinculá la sesión mediante los hooks de Codex para enviar mensajes.");
+        .child("Solo lectura · vinculá la sesión al agente activo para enviar mensajes.");
     }
-    const state = this.agentState(target);
+    const state = this.agentState(target), name = providerName(target, this.provider);
     // Never let a stale presentation status or delayed change event prevent
     // the click; sendPrompt performs a fresh, authoritative idle check.
     const ready = !this.loading && !this.sending && !this.interrupting && state !== "working" && state !== "blocked";
     const enabled = ready && Boolean(this.composer.value().trim());
     const status = this.interrupting ? "Interrumpiendo…" : this.sending ? "Enviando…" : state === "blocked" ? "Requiere tu intervención"
-      : state === "working" ? "Codex está trabajando" : (state === "idle" || state === "done") ? "Codex listo"
+      : state === "working" ? name + " está trabajando" : (state === "idle" || state === "done") ? name + " listo"
       : "Estado: " + (state ?? "sin confirmar") + " · se verifica al enviar";
     return v_flex().flex_none().border_t(1).border_color(t.border).px(12).py(8).gap(6)
       .child(h_flex().items_center().gap(8)
         .child(div().flex_1().min_w(0)
           .child(Textarea.new(this.composer).w_full().h(64).px(9).py(6).rounded(7)
             .border_1().border_color(t.input || t.border).bg(t.raised).text_color(t.foreground).text_size(13)))
-        .child(state === "working" || this.interrupting
+        .child((state === "working" || this.interrupting) && this.provider.capabilities.interrupt
           ? div().id("jec-stop").h(32).px(12).rounded(7).flex_none().flex().items_center()
             .border_1().border_color(t.border).bg(t.raised).text_color(t.foreground).text_size(12).font_medium()
             .when(!this.interrupting && !this.sending, el => el.cursor_pointer().hover(x => x.opacity(0.88))
@@ -357,9 +362,9 @@ export default class JecChat extends View {
         .child(div().flex_1())
         .child(div().text_size(11).text_color(t.dim).child("Enter: enviar · Shift+Enter: nueva línea")))
       .when(state === "blocked", el => el.child(v_flex().gap(6).p(8).rounded(7).border_1().border_color(t.border)
-        .child(div().text_size(12).text_color(t.muted).child("Codex espera una decisión. Revisá el diálogo original antes de responder."))
+        .child(div().text_size(12).text_color(t.muted).child(name + " espera una decisión. Revisá el diálogo original antes de responder."))
         .child(h_flex().gap(8)
-          .child(button(t, "jec-inspect", this.dialogLoading ? "Leyendo…" : "Ver solicitud", cx => this.inspectDialog(cx), false, true))
+          .when(this.provider.capabilities.blockedPreview, row => row.child(button(t, "jec-inspect", this.dialogLoading ? "Leyendo…" : "Ver solicitud", cx => this.inspectDialog(cx), false, true)))
           .child(button(t, "jec-resolve", "Resolver en Terminal", () => this.back(), false, true)))
         .when(Boolean(this.dialog), box => box.child(div().max_h(160).overflow_y_scrollbar().text_size(11).text_color(t.foreground)
           .child(TextView.markdown("jec-blocked-dialog", "```text\n" + this.dialog.replace(/```/g, "ˋˋˋ") + "\n```").raw_html(false).selectable(true))))))
@@ -387,7 +392,8 @@ export default class JecChat extends View {
   }
   message(t, m, i) {
     const mine = m.role === "user", tool = m.role === "tool";
-    const label = mine ? "Vos" : tool ? "Herramienta" : m.phase === "commentary" ? "Codex · progreso" : "Codex";
+    const name = providerName(this.target, this.provider);
+    const label = mine ? "Vos" : tool ? "Herramienta" : m.phase === "commentary" ? name + " · progreso" : name;
     return h_flex().id("jec-row-" + i).w_full().justify_between()
       .when(mine, el => el.child(div().flex_1()))
       .child(v_flex().max_w(770).min_w(0).gap(7).p(13).rounded(10)
@@ -410,7 +416,7 @@ export default class JecChat extends View {
       ? (program.tint ? svg(program.icon).size(14).flex_none().text_color(t.dim)
         : image(program.icon).w(14).h(14).flex_none()) : null;
     const name = this.embedded
-      ? pane?.name || ((program?.agent || program?.shell) && program.name) || pane?.title || program?.name || "Codex"
+      ? pane?.name || ((program?.agent || program?.shell) && program.name) || pane?.title || program?.name || providerName(target, this.provider)
       : "JEC Chat";
     const cwd = this.embedded ? (target.cwd || "")
       : [target.terminal || "sin terminal", target.cwd || ""].filter(Boolean).join(" · ");
@@ -437,35 +443,36 @@ export default class JecChat extends View {
     const t = theme(), valid = this.embedded ? embeddedTarget() : this.target;
     const target = this.embedded && (valid?.terminal !== this.target?.terminal
       || valid?.pane !== this.target?.pane) ? emptyTarget() : this.target;
-    const canScan = Boolean(target.terminal && target.cwd && !target.machine);
-    const canRead = canScan && (target.isCodex || this.manual);
+    const canScan = Boolean(target.terminal && target.cwd);
+    const canRead = canScan && Boolean(this.provider?.capabilities.history) && (!target.machine || this.provider.capabilities.remote);
+    const name = providerName(target, this.provider);
     return v_flex().id("jec-chat-root").w_full().h_full().min_h(0)
       .bg(t.background).text_color(t.foreground).text_size(13)
       .when(this.embedded, el => el.rounded(10).overflow_hidden().border_1().border_color(t.border))
       .child(this.header(t, target))
       .when(Boolean(this.error), el => el.child(div().p(12).bg(t.raised).text_color(t.blocked)
         .text_size(12).child(this.error)))
-      .when(Boolean(target.machine), el => el.child(div().p(18).text_color(t.muted)
-        .child("Esta versión solo lee sesiones de Codex locales. La terminal remota permanece intacta.")))
+      .when(Boolean(target.machine) && !canRead, el => el.child(div().p(18).text_color(t.muted)
+        .child("Este proveedor todavía no admite sesiones remotas. La terminal permanece intacta.")))
       .when(!target.machine && !target.terminal, el => el.child(div().p(18).text_color(t.muted)
-        .child("Seleccioná primero una terminal de Codex en Herdr y abrí nuevamente JEC Chat.")))
-      .when(canScan && !target.isCodex && !this.manual, el =>
+        .child("Seleccioná primero una terminal de un agente compatible en Herdr y abrí nuevamente JEC Chat.")))
+      .when(canScan && !target.machine && !canRead, el =>
         el.child(v_flex().p(18).gap(10)
-          .child(div().text_color(t.muted).child("Herdr no identificó esta terminal como Codex."))
-          .child(button(t, "jec-manual", "Buscar sesiones en esta carpeta", cx => {
-            this.manual = true; this.scan(cx); cx.notify();
-          }))))
-      .when(canRead && this.loading, el => el.child(div().p(16).text_color(t.muted).child("Buscando sesiones de Codex…")))
+          .child(div().text_color(t.muted).child(target.providerId ? name + " todavía no tiene proveedor habilitado." : "Herdr no identificó un agente compatible."))
+          .when(!target.providerId, box => box.child(button(t, "jec-manual", "Buscar historial de Codex (solo lectura)", cx => {
+            this.manual = true; this.provider = providerFor(this.target, true); this.scan(cx); cx.notify();
+          })))))
+      .when(canRead && this.loading, el => el.child(div().p(16).text_color(t.muted).child("Buscando sesiones de " + name + "…")))
       .when(canRead && !this.loading && !this.selected && !this.pendingRegistration && this.sessions.length > 0, el => el.child(this.sessionPicker(t)))
       .when(canRead && !this.loading && Boolean(this.pendingRegistration), el => el.child(v_flex().p(16).gap(10)
         .child(div().text_color(t.muted).child("Sesión registrada: " + this.pendingRegistration.slice(0, 12)))
-        .child(div().text_color(t.dim).child("Esperando un historial legible de Codex. Se actualizará automáticamente."))
+        .child(div().text_color(t.dim).child("Esperando un historial legible de " + name + ". Se actualizará automáticamente."))
         .child(h_flex().gap(8)
           .child(button(t, "jec-pending-retry", "Actualizar", cx => this.refresh(cx), false, this.embedded))
           .child(button(t, "jec-pending-pick", "Buscar manualmente", cx => this.resetChoice(cx), false, this.embedded)))))
       .when(canRead && !this.loading && !this.selected && !this.pendingRegistration && this.sessions.length === 0, el =>
         el.child(div().p(18).text_color(t.muted).child(
-          "No se encontró una sesión activa de Codex. Iniciá Codex en la terminal o volvé a abrir Chat.")))
+          "No se encontró una sesión activa de " + name + ". Iniciá el agente en la terminal o volvé a abrir Chat.")))
       .when(canRead && Boolean(this.selected), el =>
         el.child(v_flex().flex_1().min_h(0)
           .child(h_flex().h(this.embedded ? 29 : 35).px(this.embedded ? 12 : 16)
