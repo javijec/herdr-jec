@@ -30,3 +30,8 @@ test("no stale values shown and missing temperature not invented",async()=>{
  const partial=parseMetrics("JEC_METRICS_V1\ncpu=0\n");
  assert.doesNotMatch(describeMetrics({data:partial,at:0},1000,"PC").text,/°C/);
 });
+
+test("Linux CPU counters retain full integer precision on long-running hosts",async()=>{
+ const {LINUX_SCRIPT}=await load();
+ assert.ok(LINUX_SCRIPT.includes('printf "%.0f %.0f\\n",total,$5+$6'));
+});
