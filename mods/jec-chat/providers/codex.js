@@ -112,8 +112,7 @@ export function validatePrompt(text) {
     throw new Error("Usá Terminal para comandos de Codex o del shell.");
   return text.replace(/\r\n?/g, "\n");
 }
-export async function sendPrompt(target, session, text, stillCurrent = () => true) {
-  const prompt = validatePrompt(text);
+async function verifiedTerminal(target, session) {
   if (target?.machine || !target?.isCodex || !/^t[0-9a-z]+$/i.test(target?.terminal ?? "")
       || !session?.id || !session?.file) throw new Error("La sesión no está vinculada a una terminal local.");
   const info = await hc(["get", target.terminal, "--json"]);
@@ -124,6 +123,11 @@ export async function sendPrompt(target, session, text, stillCurrent = () => tru
   if (record.state !== "live" || (record.address && record.address !== target.terminal)
       || !entry || entry.id !== session.id.toLowerCase() || entry.file !== session.file)
     throw new Error("La sesión cambió. Actualizá el chat antes de enviar.");
+  return record;
+}
+export async function sendPrompt(target, session, text, stillCurrent = () => true) {
+  const prompt = validatePrompt(text);
+  const record = await verifiedTerminal(target, session);
   const status = terminalStatus(record);
   if (status !== "idle" && status !== "done")
     throw new Error("Codex no está listo. Estado del core: " + (status ?? "sin estado") + ". Esperá o revisá Terminal.");
@@ -151,4 +155,26 @@ export async function sendPrompt(target, session, text, stillCurrent = () => tru
   if (data?.error || data?.ok === false || data?.sent === false)
     throw new Error("Herdr no confirmó el envío. Revisá Terminal antes de volver a intentarlo.");
   return data;
+}
+
+export async function interruptPrompt(target, session, stillCurrent = () => true) {
+  const record = await verifiedTerminal(target, session);
+  if (terminalStatus(record) !== "working") throw new Error("Codex ya no está trabajando.");
+  if (!stillCurrent()) throw new Error("Cambió el panel activo. No se interrumpió.");
+  // Native soft interrupt: never kill a terminal or answer a blocked dialog.
+  const result = await hc(["interrupt", target.terminal, "--json"]);
+  if (result.code !== 0) throw new Error("Herdr no confirmó la interrupción. Revisá Terminal.");
+  let data;
+  try { data = JSON.parse(result.stdout); } catch { throw new Error("No se pudo confirmar la interrupción."); }
+  if (data?.error || data?.ok === false) throw new Error("No se pudo confirmar la interrupción.");
+  return data;
+}
+export async function blockedScreen(target, session) {
+  const record = await verifiedTerminal(target, session);
+  if (terminalStatus(record) !== "blocked") return null;
+  const read = await hc(["read", target.terminal, "--lines", "0"]);
+  if (read.code !== 0) throw new Error("No se pudo leer el diálogo de Codex.");
+  // A screen is informational only; it does not authorize injecting keys.
+  const after = await verifiedTerminal(target, session);
+  return terminalStatus(after) === "blocked" ? String(read.stdout ?? "").trim().slice(-8000) : null;
 }
