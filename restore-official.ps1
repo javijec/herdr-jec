@@ -1,10 +1,10 @@
 # Retire legacy JEC mods; preserve stock mods, sessions and unrelated integrations.
-param([string[]]$PiAgentHome)
+param([string[]]$PiAgentHome,[switch]$LegacyChat)
 $ErrorActionPreference = 'Stop'
 $appHome = if ($env:HERDR_APP_HOME) { $env:HERDR_APP_HOME } else { Join-Path $HOME '.config/herdr-app' }
 $defaultHome = Join-Path $HOME '.config/herdr-app'
 $appHomes = @($appHome,$defaultHome) | Select-Object -Unique
-$backupRoot = Join-Path $appHome ('jec-backups/chat-disabled-' + [guid]::NewGuid().ToString('N'))
+$backupRoot = Join-Path $appHome ('jec-backups/restore-' + [guid]::NewGuid().ToString('N'))
 function Backup-Jec([string]$Source,[string]$Name) {
   if (-not (Test-Path -LiteralPath $Source)) { return }
   New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
@@ -24,20 +24,30 @@ if ($layoutReply -and ($layoutReply.ok -is [bool]) -and $layoutReply.ok -and -no
 } else {
   throw "No se pudo activar main (exit=$layoutExit, respuesta=$layoutOutput). Abri Herdr y reintenta."
 }
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js es necesario para retirar solo los hooks JEC de Codex. No se movieron los mods.' }
-$scripts = @($appHomes | ForEach-Object { Join-Path $_ 'mods/jec-chat/providers/session-hook.cjs' })
-& node (Join-Path $PSScriptRoot 'scripts/disable-chat-hooks.cjs') @scripts
-if ($LASTEXITCODE -ne 0) { throw 'No se pudieron desactivar los hooks JEC; no se movieron los mods.' }
-foreach ($root in $appHomes) {
-  foreach ($name in @('jec-chat','jec-pane','jec-chat-native','jec-machines','jec-spaces','jec-agents','jec-workspace-status','jec-workspace-chrome')) { Backup-Jec (Join-Path $root "mods/$name") $name }
-  foreach ($name in @('jec-chat.json','jec-chat-native.json','jec.json')) { Backup-Jec (Join-Path $root "layouts/$name") $name }
+if ($LegacyChat) {
+  if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js es necesario para retirar solo los hooks JEC de Codex. No se movieron los mods.' }
+  $scripts = @($appHomes | ForEach-Object { Join-Path $_ 'mods/jec-chat/providers/session-hook.cjs' })
+  & node (Join-Path $PSScriptRoot 'scripts/disable-chat-hooks.cjs') @scripts
+  if ($LASTEXITCODE -ne 0) { throw 'No se pudieron desactivar los hooks JEC; no se movieron los mods.' }
 }
-$ocConfig = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } elseif ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME 'opencode' } else { Join-Path $HOME '.config/opencode' }
-Backup-Jec (Join-Path $ocConfig 'plugins/jec-chat-opencode') 'opencode-chat'
-$homes = @($PiAgentHome)
-$homes += $(if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME '.pi/agent' })
-$homes += $(if ($env:GENTLE_PI_AGENT_HOME) { $env:GENTLE_PI_AGENT_HOME } elseif ($env:GENTLE_SHELL_HOME) { $env:GENTLE_SHELL_HOME } else { Join-Path $HOME '.gentle-shell/agent' })
-$homes += $env:GENTLE_SHELL_USER_PI_HOME
-foreach ($agentHome in ($homes | Where-Object { $_ } | Select-Object -Unique)) { Backup-Jec (Join-Path $agentHome 'extensions/jec-chat.ts') 'pi-chat' }
+$modNames = @('jec-spaces','jec-agents','jec-workspace-status','jec-workspace-chrome')
+$layoutNames = @('jec.json')
+if ($LegacyChat) {
+  $modNames += @('jec-chat','jec-pane','jec-chat-native','jec-machines')
+  $layoutNames += @('jec-chat.json','jec-chat-native.json')
+}
+foreach ($root in $appHomes) {
+  foreach ($name in $modNames) { Backup-Jec (Join-Path $root "mods/$name") $name }
+  foreach ($name in $layoutNames) { Backup-Jec (Join-Path $root "layouts/$name") $name }
+}
+if ($LegacyChat) {
+  $ocConfig = if ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } elseif ($env:XDG_CONFIG_HOME) { Join-Path $env:XDG_CONFIG_HOME 'opencode' } else { Join-Path $HOME '.config/opencode' }
+  Backup-Jec (Join-Path $ocConfig 'plugins/jec-chat-opencode') 'opencode-chat'
+  $homes = @($PiAgentHome)
+  $homes += $(if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME '.pi/agent' })
+  $homes += $(if ($env:GENTLE_PI_AGENT_HOME) { $env:GENTLE_PI_AGENT_HOME } elseif ($env:GENTLE_SHELL_HOME) { $env:GENTLE_SHELL_HOME } else { Join-Path $HOME '.gentle-shell/agent' })
+  $homes += $env:GENTLE_SHELL_USER_PI_HOME
+  foreach ($agentHome in ($homes | Where-Object { $_ } | Select-Object -Unique)) { Backup-Jec (Join-Path $agentHome 'extensions/jec-chat.ts') 'pi-chat' }
+}
 Write-Host 'Mods JEC anteriores retirados. Herdr usa su layout oficial main. No se cerraron terminales ni se borraron sesiones.'
-Write-Host 'Reinicia o recarga los agentes cuando terminen sus tareas; los plugins ya cargados pueden seguir en memoria hasta entonces.'
+if ($LegacyChat) { Write-Host 'Recarga los agentes cuando terminen sus tareas.' }

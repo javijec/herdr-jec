@@ -29,6 +29,34 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 Volver a la interfaz original: `herdr-app do layout.switch --name main`.
 
+## v0.5 — Integración
+
+Los cuatro mods se instalan juntos por defecto. Agents y Workspace Status cuentan los mismos agentes y descendientes vivos, sin duplicados. La fuente compartida se distribuye en cada mod para mantenerlos independientes y evitar imports entre mods. No se añaden hooks, timers ni procesos en segundo plano.
+
+Instalación selectiva (desde PowerShell con ejecución de scripts habilitada):
+
+```powershell
+.\install.ps1 -Mods spaces,agents
+```
+
+Sólo los mods seleccionados se usan en el layout jec; el resto vuelve a los componentes oficiales. Los archivos JEC previamente instalados pero no seleccionados pueden permanecer inactivos. El instalador verifica los mods seleccionados antes de cambiar archivos, vuelve a main, crea un respaldo de los destinos existentes y trata de revertir cambios si falla la instalación. Si no puede confirmar main, se detiene y conserva el respaldo. El layout personalizado se regenera desde el perfil de fábrica, no conserva ajustes manuales de tamaño del layout jec.
+
+Restauración completa de los mods actuales (sin Node.js):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\restore-official.ps1
+```
+
+La limpieza de Chat antiguo es optativa con `-LegacyChat` (requiere Node.js). No modifica hooks sin esa opción.
+
+Verificación local, sin GitHub Actions:
+
+```powershell
+node scripts/verify.cjs
+```
+
+Con la referencia oficial materializada, usar `node scripts/verify.cjs --require-upstream` para exigir la comparación exacta de los cuatro mods y el layout con upstream. Tras editar `shared/agent-summary.js`, ejecutar `node scripts/sync-shared.cjs` antes de verificar.
+
 ## Desarrollo
 
 La referencia oficial completa se obtiene opcionalmente con `git submodule update --init --depth 1 upstream/herdr-app`. Ver [inventario](upstream/README.md). Regenerar la extensión con `node scripts/derive-spaces.cjs`; verificar con `node scripts/derive-spaces.cjs --check`. Para Agents usar también `node scripts/derive-agents.cjs --check` (o sin `--check` para regenerar). Para Workspace Status usar `node scripts/derive-workspace-status.cjs --check` (o sin `--check` para regenerar). Para Workspace Chrome usar `node scripts/derive-workspace-chrome.cjs --check` (o sin `--check` para regenerar). Ejecutar pruebas locales con `node --test`. No se ejecuta CI automáticamente.
